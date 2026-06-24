@@ -5,16 +5,24 @@ import TaskForm from "../components/TaskForm"
 const Project = ({ project, utente, onBack }) => {
     const [tasks, setTasks] = useState([])
     const [showForm, setShowForm] = useState(false)
+    const [loading, setLoading] = useState(true)
 
     const fetchTasks = async () => {
         const { data, error } = await supabase
             .from("tasks")
-            .select("*, users!tasks_assegnato_a_fkey(nome, cognome)")
+            .select("*")
             .eq("project_id", project.id)
             .order("created_at", { ascending: false })
 
         if (error) console.error(error)
         else setTasks(data ?? [])
+        setLoading(false)
+    }
+
+    const handleDelete = async (id) => {
+        if (!window.confirm("Sei sicuro di voler eliminare questo task?")) return
+        await supabase.from("tasks").delete().eq("id", id)
+        fetchTasks()
     }
 
     useEffect(() => {
@@ -33,7 +41,7 @@ const Project = ({ project, utente, onBack }) => {
                 <div className="flex items-center gap-3">
                     <button
                         onClick={onBack}
-                        className="text-gray-400 hover:text-gray-600 transition-colors"
+                        className="bg-blue-500 text-white px-4 py-2 rounded-xl text-sm hover:bg-blue-600 transition-colors"
                     >
                         ← Indietro
                     </button>
@@ -52,7 +60,9 @@ const Project = ({ project, utente, onBack }) => {
                     <p className="text-gray-500 text-sm mb-6">{project.description}</p>
                 )}
 
-                {tasks.length === 0 ? (
+                {loading ? (
+                    <p className="text-gray-400 text-center mt-12">Caricamento...</p>
+                ) : tasks.length === 0 ? (
                     <p className="text-gray-400 text-center mt-12">
                         Nessun task ancora — creane uno !
                     </p>
@@ -84,13 +94,9 @@ const Project = ({ project, utente, onBack }) => {
                                 <div className="flex items-center justify-between mt-3">
                                     <div className="flex items-center gap-4 text-xs text-gray-400">
                                         {task.scadenza && <span>📅 {task.scadenza}</span>}
-                                        {task.users && <span>👤 {task.users.nome} {task.users.cognome}</span>}
                                     </div>
                                     <button
-                                        onClick={async () => {
-                                            await supabase.from("tasks").delete().eq("id", task.id)
-                                            fetchTasks()
-                                        }}
+                                        onClick={() => handleDelete(task.id)}
                                         className="text-xs text-red-400 hover:text-red-600 transition-colors"
                                     >
                                         Elimina

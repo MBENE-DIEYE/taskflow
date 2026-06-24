@@ -16,22 +16,37 @@ const Login = ({ onLogin }) => {
         setErrore("")
 
         if (isRegistro) {
-            const { error } = await supabase
-                .from("users")
-                .insert({ nome, cognome, email, password_hash: password })
+            const { data, error } = await supabase.auth.signUp({ email, password })
 
-            if (error) setErrore(error.message)
-            else onLogin({ nome, cognome, email })
+            if (error) {
+                setErrore(error.message)
+                setLoading(false)
+                return
+            }
+
+            const { error: insertError } = await supabase
+                .from("users")
+                .insert({ id: data.user.id, nome, cognome, email })
+
+            if (insertError) setErrore(insertError.message)
+            else onLogin({ id: data.user.id, nome, cognome, email })
         } else {
-            const { data, error } = await supabase
+            const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+
+            if (error) {
+                setErrore("Email o password errati !")
+                setLoading(false)
+                return
+            }
+
+            const { data: userData, error: userError } = await supabase
                 .from("users")
                 .select("*")
-                .eq("email", email)
-                .eq("password_hash", password)
+                .eq("id", data.user.id)
                 .single()
 
-            if (error || !data) setErrore("Email o password errati !")
-            else onLogin(data)
+            if (userError || !userData) setErrore("Utente non trovato")
+            else onLogin(userData)
         }
 
         setLoading(false)
@@ -41,7 +56,7 @@ const Login = ({ onLogin }) => {
         <div className='min-h-screen bg-gray-50 flex items-center justify-center'>
             <div className='bg-white rounded-2xl shadow-sm border border-gray-100 p-8 w-full max-w-md'>
                 <h1 className='text-2xl font-bold text-gray-800 mb-2'>
-                    {isRegistro ? "Crea account" : "Bentornata !"}
+                    {isRegistro ? "Crea account" : "Bentornato !"}
                 </h1>
                 <p className='text-gray-500 text-sm mb-6'>
                     {isRegistro ? "Registrati su TaskFlow" : "Accedi a TaskFlow"}
@@ -93,7 +108,7 @@ const Login = ({ onLogin }) => {
                     <button
                         type='submit'
                         disabled={loading}
-                        className='bg-blue-500 text-white px-6 py-2 rounded-xl hover:bg-blue-600 transition-colors disabled:opacity-50'
+                        className='bg-green-800 text-white px-6 py-2 rounded-xl hover:bg-green-900 transition-colors disabled:opacity-50'
                     >
                         {loading ? "Caricamento..." : isRegistro ? "Registrati" : "Accedi"}
                     </button>

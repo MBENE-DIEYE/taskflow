@@ -5,6 +5,7 @@ import ProjectForm from "../components/ProjectForm"
 const Dashboard = ({ utente, onLogout, onSelectProject }) => {
     const [projects, setProjects] = useState([])
     const [showForm, setShowForm] = useState(false)
+    const [loading, setLoading] = useState(true)
 
     const fetchProjects = async () => {
         const { data, error } = await supabase
@@ -14,6 +15,7 @@ const Dashboard = ({ utente, onLogout, onSelectProject }) => {
 
         if (error) console.error(error)
         else setProjects(data ?? [])
+        setLoading(false)
     }
 
     useEffect(() => {
@@ -46,7 +48,9 @@ const Dashboard = ({ utente, onLogout, onSelectProject }) => {
                     </button>
                 </div>
 
-                {projects.length === 0 ? (
+                {loading ? (
+                    <p className="text-gray-400 text-center mt-12">Caricamento...</p>
+                ) : projects.length === 0 ? (
                     <p className="text-gray-400 text-center mt-12">
                         Nessun progetto ancora — creane uno !
                     </p>
@@ -69,7 +73,7 @@ const Dashboard = ({ utente, onLogout, onSelectProject }) => {
 
                                     <div className="flex items-center gap-3 text-xs">
                                         <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
-                                            📋 {totale} task
+                                            📋 {daFare} da fare
                                         </span>
                                         <span className="bg-yellow-100 text-yellow-600 px-2 py-1 rounded-full">
                                             ⏳ {inCorso} in corso

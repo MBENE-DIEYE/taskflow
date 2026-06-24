@@ -6,9 +6,12 @@ const ProjectForm = ({ utente, onProjectAdded, onClose }) => {
     const [description, setDescription] = useState("")
     const [loading, setLoading] = useState(false)
 
+    const [errore, setErrore] = useState("")
+
     const handleSubmit = async (e) => {
         e.preventDefault()
         setLoading(true)
+        setErrore("")
 
         const { error } = await supabase
             .from("projects")
@@ -18,7 +21,7 @@ const ProjectForm = ({ utente, onProjectAdded, onClose }) => {
                 user_id: utente.id
             })
 
-        if (error) console.error(error)
+        if (error) setErrore(error.message)
         else {
             onProjectAdded()
             onClose()
@@ -28,9 +31,15 @@ const ProjectForm = ({ utente, onProjectAdded, onClose }) => {
     }
 
     return (
-        <div className="fixed inset-0 bg-gray-50 bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
             <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-xl">
                 <h2 className="text-xl font-semibold text-gray-800 mb-6">Nuovo progetto</h2>
+
+                {errore && (
+                    <div className="bg-red-50 text-red-500 text-sm px-4 py-3 rounded-xl mb-2">
+                        {errore}
+                    </div>
+                )}
 
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                     <input

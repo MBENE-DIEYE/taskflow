@@ -6,10 +6,12 @@ const TaskForm = ({ project, utente, onTaskAdded, onClose }) => {
     const [description, setDescription] = useState("")
     const [scadenza, setScadenza] = useState("")
     const [loading, setLoading] = useState(false)
+    const [errore, setErrore] = useState("")
 
     const handleSubmit = async (e) => {
         e.preventDefault()
         setLoading(true)
+        setErrore("")
 
         const { error } = await supabase
             .from("tasks")
@@ -22,7 +24,7 @@ const TaskForm = ({ project, utente, onTaskAdded, onClose }) => {
                 stato: "da_fare"
             })
 
-        if (error) console.error(error)
+        if (error) setErrore(error.message)
         else {
             onTaskAdded()
             onClose()
@@ -32,9 +34,15 @@ const TaskForm = ({ project, utente, onTaskAdded, onClose }) => {
     }
 
     return (
-        <div className="fixed inset-0 bg-gray-50 bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
             <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-xl">
                 <h2 className="text-xl font-semibold text-gray-800 mb-6">Nuovo task</h2>
+
+                {errore && (
+                    <div className="bg-red-50 text-red-500 text-sm px-4 py-3 rounded-xl mb-4">
+                        {errore}
+                    </div>
+                )}
 
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                     <input
