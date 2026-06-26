@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"
 import { supabase } from "../supabase"
 import TaskForm from "../components/TaskForm"
+import Chat from "../components/Chat"
 
 const Project = ({ project, utente, onBack }) => {
     const [tasks, setTasks] = useState([])
@@ -281,8 +282,8 @@ const Project = ({ project, utente, onBack }) => {
                                         {task.scadenza && <span>📅 {task.scadenza}</span>}
                                         {task.priorita && (
                                             <span className={`font-medium ${task.priorita === "alta" ? "text-red-500" :
-                                                    task.priorita === "media" ? "text-yellow-500" :
-                                                        "text-green-500"
+                                                task.priorita === "media" ? "text-yellow-500" :
+                                                    "text-green-500"
                                                 }`}>
                                                 {task.priorita === "alta" ? "🔴" :
                                                     task.priorita === "media" ? "🟡" : "🟢"} {task.priorita}
@@ -303,6 +304,10 @@ const Project = ({ project, utente, onBack }) => {
                         ))}
                     </div>
                 )}
+                {/* Chat del progetto */}
+                <div className="mt-8">
+                    <Chat project={project} utente={utente} />
+                </div>
             </main>
 
             {showForm && (

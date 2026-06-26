@@ -53,12 +53,36 @@ const TaskForm = ({ project, utente, onTaskAdded, onClose }) => {
                 stato: "da_fare"
             })
 
-        if (error) setErrore(error.message)
-        else {
-            onTaskAdded()
-            onClose()
+        if (error) {
+            setErrore(error.message)
+            setLoading(false)
+            return
         }
 
+        // Se c'è un assegnatario mandiamo l'email automatica
+        if (assegnatoA) {
+            // Troviamo l'email dell'assegnatario
+            const { data: assegnatarioData } = await supabase
+                .from("users")
+                .select("nome, cognome, email")
+                .eq("id", assegnatoA)
+                .single()
+
+            if (assegnatarioData) {
+                // Chiamiamo la Edge Function di Supabase
+                await supabase.functions.invoke("invia-email", {
+                    body: {
+                        titolo,
+                        assegnatarioEmail: assegnatarioData.email,
+                        assegnatarioNome: assegnatarioData.nome,
+                        progetto: project.nome
+                    }
+                })
+            }
+        }
+
+        onTaskAdded()
+        onClose()
         setLoading(false)
     }
 
