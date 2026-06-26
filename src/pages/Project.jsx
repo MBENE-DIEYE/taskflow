@@ -21,11 +21,35 @@ const Project = ({ project, utente, onBack }) => {
             .eq("project_id", project.id)
             .order("created_at", { ascending: false })
 
-        if (error) console.error(error)
-        else setTasks(data ?? [])
+        if (error) {
+            console.error(error)
+            setLoading(false)
+            return
+        }
+
+        // Per ogni task carichiamo il nome dell'assegnatario
+        const tasksConAssegnatario = await Promise.all(
+            (data ?? []).map(async (task) => {
+                if (!task.assegnato_a) return { ...task, assegnatarioNome: null }
+
+                const { data: utenteData } = await supabase
+                    .from("users")
+                    .select("nome, cognome")
+                    .eq("id", task.assegnato_a)
+                    .single()
+
+                return {
+                    ...task,
+                    assegnatarioNome: utenteData
+                        ? `${utenteData.nome} ${utenteData.cognome}`
+                        : null
+                }
+            })
+        )
+
+        setTasks(tasksConAssegnatario)
         setLoading(false)
     }
-
     const fetchMembri = async () => {
         // Prima prendiamo i membri del progetto
         const { data: membriData, error } = await supabase
@@ -255,6 +279,18 @@ const Project = ({ project, utente, onBack }) => {
                                 <div className="flex items-center justify-between mt-3">
                                     <div className="flex items-center gap-4 text-xs text-gray-400">
                                         {task.scadenza && <span>📅 {task.scadenza}</span>}
+                                        {task.priorita && (
+                                            <span className={`font-medium ${task.priorita === "alta" ? "text-red-500" :
+                                                    task.priorita === "media" ? "text-yellow-500" :
+                                                        "text-green-500"
+                                                }`}>
+                                                {task.priorita === "alta" ? "🔴" :
+                                                    task.priorita === "media" ? "🟡" : "🟢"} {task.priorita}
+                                            </span>
+                                        )}
+                                        {task.assegnatarioNome && (
+                                            <span>👤 {task.assegnatarioNome}</span>
+                                        )}
                                     </div>
                                     <button
                                         onClick={() => handleDelete(task.id)}
