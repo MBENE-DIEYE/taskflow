@@ -7,6 +7,13 @@ const Project = ({ project, utente, onBack }) => {
     const [showForm, setShowForm] = useState(false)
     const [loading, setLoading] = useState(true)
 
+    // --- NUOVO: stato per i collaboratori ---
+    const [membri, setMembri] = useState([])
+    const [emailInvito, setEmailInvito] = useState("")
+    const [messaggioInvito, setMessaggioInvito] = useState("")
+    const [showCollaboratori, setShowCollaboratori] = useState(false)
+
+    // Fetch delle task
     const fetchTasks = async () => {
         const { data, error } = await supabase
             .from("tasks")
@@ -19,6 +26,90 @@ const Project = ({ project, utente, onBack }) => {
         setLoading(false)
     }
 
+    const fetchMembri = async () => {
+        // Prima prendiamo i membri del progetto
+        const { data: membriData, error } = await supabase
+            .from("project_members")
+            .select("*")
+            .eq("project_id", project.id)
+
+        if (error) {
+            console.error(error)
+            return
+        }
+
+        // Poi per ogni membro prendiamo i dati dell'utente separatamente
+        const membriConUtenti = await Promise.all(
+            (membriData ?? []).map(async (membro) => {
+                const { data: utenteData } = await supabase
+                    .from("users")
+                    .select("nome, cognome, email")
+                    .eq("id", membro.user_id)
+                    .single()
+
+                return { ...membro, users: utenteData }
+            })
+        )
+
+        setMembri(membriConUtenti)
+    }
+
+    // --- NUOVO: invitare un collaboratore tramite email ---
+    const invitaCollaboratore = async () => {
+        setMessaggioInvito("")
+
+        if (!emailInvito.trim()) {
+            setMessaggioInvito("Inserisci un'email valida")
+            return
+        }
+
+        // 1. Cerchiamo l'utente con quella email nella tabella users
+        const { data: utenteTrovato, error: erroreRicerca } = await supabase
+            .from("users")
+            .select("id, nome, email")
+            .eq("email", emailInvito.trim())
+            .single()
+
+        if (erroreRicerca || !utenteTrovato) {
+            setMessaggioInvito("Nessun utente trovato con questa email")
+            return
+        }
+
+        // 2. Verifichiamo che non sia già membro
+        const giaPresente = membri.find(m => m.user_id === utenteTrovato.id)
+        if (giaPresente) {
+            setMessaggioInvito("Questo utente è già collaboratore del progetto")
+            return
+        }
+
+        // 3. Aggiungiamo l'utente a project_members
+        const { error: erroreInserimento } = await supabase
+            .from("project_members")
+            .insert({
+                project_id: project.id,
+                user_id: utenteTrovato.id,
+                ruolo: "membro"
+            })
+
+        if (erroreInserimento) {
+            setMessaggioInvito("Errore durante l'aggiunta del collaboratore")
+            console.error(erroreInserimento)
+            return
+        }
+
+        // 4. Tutto ok!
+        setMessaggioInvito(`✅ ${utenteTrovato.nome} aggiunto con successo!`)
+        setEmailInvito("")
+        fetchMembri()
+    }
+
+    // --- NUOVO: rimuovere un collaboratore ---
+    const rimuoviMembro = async (membroId) => {
+        if (!window.confirm("Rimuovere questo collaboratore?")) return
+        await supabase.from("project_members").delete().eq("id", membroId)
+        fetchMembri()
+    }
+
     const handleDelete = async (id) => {
         if (!window.confirm("Sei sicuro di voler eliminare questo task?")) return
         await supabase.from("tasks").delete().eq("id", id)
@@ -27,6 +118,7 @@ const Project = ({ project, utente, onBack }) => {
 
     useEffect(() => {
         fetchTasks()
+        fetchMembri()
     }, [])
 
     const statoColore = (stato) => {
@@ -47,13 +139,82 @@ const Project = ({ project, utente, onBack }) => {
                     </button>
                     <h1 className="text-xl font-bold text-gray-800">{project.nome}</h1>
                 </div>
-                <button
-                    onClick={() => setShowForm(true)}
-                    className="bg-blue-500 text-white px-4 py-2 rounded-xl text-sm hover:bg-blue-600 transition-colors"
-                >
-                    + Nuovo task
-                </button>
+                <div className="flex gap-2">
+                    {/* NUOVO: bottone collaboratori */}
+                    <button
+                        onClick={() => setShowCollaboratori(!showCollaboratori)}
+                        className="bg-purple-500 text-white px-4 py-2 rounded-xl text-sm hover:bg-purple-600 transition-colors"
+                    >
+                        👥 Collaboratori ({membri.length})
+                    </button>
+                    <button
+                        onClick={() => setShowForm(true)}
+                        className="bg-blue-500 text-white px-4 py-2 rounded-xl text-sm hover:bg-blue-600 transition-colors"
+                    >
+                        + Nuovo task
+                    </button>
+                </div>
             </header>
+
+            {/* NUOVO: pannello collaboratori — appare solo quando clicchi il bottone */}
+            {showCollaboratori && (
+                <div className="bg-white border-b border-gray-100 px-6 py-4 max-w-4xl mx-auto mt-4 rounded-xl shadow-sm">
+                    <h2 className="font-semibold text-gray-700 mb-3">Collaboratori del progetto</h2>
+
+                    {/* Form invito */}
+                    <div className="flex gap-2 mb-3">
+                        <input
+                            type="email"
+                            placeholder="Email del collaboratore..."
+                            value={emailInvito}
+                            onChange={(e) => setEmailInvito(e.target.value)}
+                            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-purple-400"
+                        />
+                        <button
+                            onClick={invitaCollaboratore}
+                            className="bg-purple-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-purple-600 transition-colors"
+                        >
+                            Aggiungi
+                        </button>
+                    </div>
+
+                    {/* Messaggio di feedback */}
+                    {messaggioInvito && (
+                        <p className="text-sm mb-3 text-gray-600">{messaggioInvito}</p>
+                    )}
+
+                    {/* Lista membri */}
+                    {membri.length === 0 ? (
+                        <p className="text-sm text-gray-400">Nessun collaboratore ancora.</p>
+                    ) : (
+                        <div className="flex flex-col gap-2">
+                            {membri.map(membro => (
+                                <div key={membro.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
+                                    <div>
+                                        <span className="text-sm font-medium text-gray-700">
+                                            {membro.users?.nome} {membro.users?.cognome}
+                                        </span>
+                                        <span className="text-xs text-gray-400 ml-2">
+                                            {membro.users?.email}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs bg-purple-100 text-purple-600 px-2 py-1 rounded-full">
+                                            {membro.ruolo}
+                                        </span>
+                                        <button
+                                            onClick={() => rimuoviMembro(membro.id)}
+                                            className="text-xs text-red-400 hover:text-red-600"
+                                        >
+                                            Rimuovi
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
 
             <main className="max-w-4xl mx-auto px-4 py-8">
                 {project.description && (
