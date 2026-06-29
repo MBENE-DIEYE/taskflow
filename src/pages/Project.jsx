@@ -3,7 +3,7 @@ import { supabase } from "../supabase"
 import TaskForm from "../components/TaskForm"
 import Chat from "../components/Chat"
 
-const Project = ({ project, utente, onBack }) => {
+const Project = ({ project, utente, onBack, onLogout }) => {
     const [tasks, setTasks] = useState([])
     const [showForm, setShowForm] = useState(false)
     const [loading, setLoading] = useState(true)
@@ -177,6 +177,12 @@ const Project = ({ project, utente, onBack }) => {
                         className="bg-blue-500 text-white px-4 py-2 rounded-xl text-sm hover:bg-blue-600 transition-colors"
                     >
                         + Nuovo task
+                    </button>
+                    <button
+                        onClick={onLogout}
+                        className="text-xs text-red-400 hover:text-red-600 transition-colors"
+                    >
+                        Esci
                     </button>
                 </div>
             </header>

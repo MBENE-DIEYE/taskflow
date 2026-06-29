@@ -67,6 +67,7 @@ const App = () => {
           project={selectedProject}
           utente={utente}
           onBack={() => setPage("dashboard")}
+          onLogout={handleLogout}
         />
       )}
     </div>
