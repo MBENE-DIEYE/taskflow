@@ -4,8 +4,19 @@ import ProjectForm from "../components/ProjectForm"
 
 const Dashboard = ({ utente, onLogout, onSelectProject }) => {
     const [projects, setProjects] = useState([])
+    const [taskAssegnati, setTaskAssegnati] = useState([])
     const [showForm, setShowForm] = useState(false)
     const [loading, setLoading] = useState(true)
+
+    const fetchTaskAssegnati = async () => {
+        const { data } = await supabase
+            .from("tasks")
+            .select("*, projects(nome)")
+            .eq("assegnato_a", utente.id)
+            .neq("stato", "completato")
+            .order("created_at", { ascending: false })
+        setTaskAssegnati(data ?? [])
+    }
 
     const fetchProjects = async () => {
         // Progetti di cui sei proprietario
@@ -47,6 +58,7 @@ const Dashboard = ({ utente, onLogout, onSelectProject }) => {
 
     useEffect(() => {
         fetchProjects()
+        fetchTaskAssegnati()
     }, [])
 
     return (
@@ -65,6 +77,28 @@ const Dashboard = ({ utente, onLogout, onSelectProject }) => {
             </header>
 
             <main className="max-w-4xl mx-auto px-4 py-8">
+                {taskAssegnati.length > 0 && (
+                    <div className="mb-10">
+                        <h2 className="text-xl font-semibold text-gray-800 mb-4">📌 Task assegnati a te</h2>
+                        <div className="flex flex-col gap-3">
+                            {taskAssegnati.map(task => (
+                                <div key={task.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex items-center justify-between">
+                                    <div>
+                                        <p className="font-medium text-gray-800 text-sm">{task.titolo}</p>
+                                        <p className="text-xs text-gray-400 mt-1">📁 {task.projects?.nome}</p>
+                                        {task.scadenza && <p className="text-xs text-gray-400 mt-1">📅 {task.scadenza}</p>}
+                                    </div>
+                                    <span className={`text-xs px-3 py-1 rounded-full font-medium shrink-0 ml-4 ${
+                                        task.stato === "in_corso" ? "bg-yellow-100 text-yellow-600" : "bg-gray-100 text-gray-600"
+                                    }`}>
+                                        {task.stato === "in_corso" ? "in corso" : "da fare"}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 <div className="flex items-center justify-between mb-6">
                     <h2 className="text-xl font-semibold text-gray-800">I tuoi progetti</h2>
                     <button

@@ -23,20 +23,24 @@ const Project = ({ project, utente, onBack, onLogout }) => {
 
         if (error) { console.error(error); setLoading(false); return }
 
-        // Batch: una sola query per tutti gli assegnatari
-        const userIds = [...new Set((data ?? []).filter(t => t.assegnato_a).map(t => t.assegnato_a))]
+        // Batch: una sola query per assegnatari E creatori insieme
+        const assigneeIds = (data ?? []).filter(t => t.assegnato_a).map(t => t.assegnato_a)
+        const creatorIds = (data ?? []).map(t => t.user_id)
+        const allUserIds = [...new Set([...assigneeIds, ...creatorIds])]
+
         let usersMap = {}
-        if (userIds.length > 0) {
+        if (allUserIds.length > 0) {
             const { data: usersData } = await supabase
                 .from("users")
                 .select("id, nome, cognome")
-                .in("id", userIds)
+                .in("id", allUserIds)
             usersData?.forEach(u => { usersMap[u.id] = `${u.nome} ${u.cognome}` })
         }
 
         setTasks((data ?? []).map(t => ({
             ...t,
-            assegnatarioNome: t.assegnato_a ? usersMap[t.assegnato_a] : null
+            assegnatarioNome: t.assegnato_a ? usersMap[t.assegnato_a] : null,
+            creatoreNome: usersMap[t.user_id] ?? null
         })))
         setLoading(false)
     }
@@ -284,7 +288,10 @@ const Project = ({ project, utente, onBack, onLogout }) => {
                                             </span>
                                         )}
                                         {task.assegnatarioNome && (
-                                            <span>👤 {task.assegnatarioNome}</span>
+                                            <span>👤 a {task.assegnatarioNome}</span>
+                                        )}
+                                        {task.creatoreNome && (
+                                            <span>✏️ da {task.creatoreNome}</span>
                                         )}
                                     </div>
                                     <div className="flex items-center gap-3">

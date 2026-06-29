@@ -74,37 +74,45 @@ const Login = ({ onLogin }) => {
                         <>
                             <input
                                 type="text"
+                                name="given-name"
                                 placeholder='Nome'
                                 value={nome}
                                 onChange={e => setNome(e.target.value)}
                                 required
+                                autoComplete="given-name"
                                 className='px-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-300'
                             />
                             <input
                                 type="text"
+                                name="family-name"
                                 placeholder='Cognome'
                                 value={cognome}
                                 onChange={e => setCognome(e.target.value)}
                                 required
+                                autoComplete="family-name"
                                 className='px-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-300'
                             />
                         </>
                     )}
                     <input
                         type="email"
+                        name="email"
                         placeholder="Email"
                         value={email}
                         onChange={e => setEmail(e.target.value)}
                         required
+                        autoComplete="email"
                         className="px-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-300"
                     />
                     <div className="relative">
                         <input
                             type={mostraPassword ? "text" : "password"}
+                            name="password"
                             placeholder="Password"
                             value={password}
                             onChange={e => setPassword(e.target.value)}
                             required
+                            autoComplete={isRegistro ? "new-password" : "current-password"}
                             className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-300 pr-10"
                         />
                         <button
