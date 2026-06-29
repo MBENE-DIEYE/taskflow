@@ -6,15 +6,14 @@ import Chat from "../components/Chat"
 const Project = ({ project, utente, onBack, onLogout }) => {
     const [tasks, setTasks] = useState([])
     const [showForm, setShowForm] = useState(false)
+    const [editingTask, setEditingTask] = useState(null)
     const [loading, setLoading] = useState(true)
 
-    // --- NUOVO: stato per i collaboratori ---
     const [membri, setMembri] = useState([])
     const [emailInvito, setEmailInvito] = useState("")
     const [messaggioInvito, setMessaggioInvito] = useState("")
     const [showCollaboratori, setShowCollaboratori] = useState(false)
 
-    // Fetch delle task
     const fetchTasks = async () => {
         const { data, error } = await supabase
             .from("tasks")
@@ -22,64 +21,48 @@ const Project = ({ project, utente, onBack, onLogout }) => {
             .eq("project_id", project.id)
             .order("created_at", { ascending: false })
 
-        if (error) {
-            console.error(error)
-            setLoading(false)
-            return
+        if (error) { console.error(error); setLoading(false); return }
+
+        // Batch: una sola query per tutti gli assegnatari
+        const userIds = [...new Set((data ?? []).filter(t => t.assegnato_a).map(t => t.assegnato_a))]
+        let usersMap = {}
+        if (userIds.length > 0) {
+            const { data: usersData } = await supabase
+                .from("users")
+                .select("id, nome, cognome")
+                .in("id", userIds)
+            usersData?.forEach(u => { usersMap[u.id] = `${u.nome} ${u.cognome}` })
         }
 
-        // Per ogni task carichiamo il nome dell'assegnatario
-        const tasksConAssegnatario = await Promise.all(
-            (data ?? []).map(async (task) => {
-                if (!task.assegnato_a) return { ...task, assegnatarioNome: null }
-
-                const { data: utenteData } = await supabase
-                    .from("users")
-                    .select("nome, cognome")
-                    .eq("id", task.assegnato_a)
-                    .single()
-
-                return {
-                    ...task,
-                    assegnatarioNome: utenteData
-                        ? `${utenteData.nome} ${utenteData.cognome}`
-                        : null
-                }
-            })
-        )
-
-        setTasks(tasksConAssegnatario)
+        setTasks((data ?? []).map(t => ({
+            ...t,
+            assegnatarioNome: t.assegnato_a ? usersMap[t.assegnato_a] : null
+        })))
         setLoading(false)
     }
+
     const fetchMembri = async () => {
-        // Prima prendiamo i membri del progetto
         const { data: membriData, error } = await supabase
             .from("project_members")
             .select("*")
             .eq("project_id", project.id)
 
-        if (error) {
-            console.error(error)
-            return
+        if (error) { console.error(error); return }
+
+        // Batch: una sola query per tutti gli utenti
+        const userIds = (membriData ?? []).map(m => m.user_id)
+        let usersMap = {}
+        if (userIds.length > 0) {
+            const { data: usersData } = await supabase
+                .from("users")
+                .select("id, nome, cognome, email")
+                .in("id", userIds)
+            usersData?.forEach(u => { usersMap[u.id] = u })
         }
 
-        // Poi per ogni membro prendiamo i dati dell'utente separatamente
-        const membriConUtenti = await Promise.all(
-            (membriData ?? []).map(async (membro) => {
-                const { data: utenteData } = await supabase
-                    .from("users")
-                    .select("nome, cognome, email")
-                    .eq("id", membro.user_id)
-                    .single()
-
-                return { ...membro, users: utenteData }
-            })
-        )
-
-        setMembri(membriConUtenti)
+        setMembri((membriData ?? []).map(m => ({ ...m, users: usersMap[m.user_id] })))
     }
 
-    // --- NUOVO: invitare un collaboratore tramite email ---
     const invitaCollaboratore = async () => {
         setMessaggioInvito("")
 
@@ -88,7 +71,6 @@ const Project = ({ project, utente, onBack, onLogout }) => {
             return
         }
 
-        // 1. Cerchiamo l'utente con quella email nella tabella users
         const { data: utenteTrovato, error: erroreRicerca } = await supabase
             .from("users")
             .select("id, nome, email")
@@ -100,14 +82,12 @@ const Project = ({ project, utente, onBack, onLogout }) => {
             return
         }
 
-        // 2. Verifichiamo che non sia già membro
         const giaPresente = membri.find(m => m.user_id === utenteTrovato.id)
         if (giaPresente) {
             setMessaggioInvito("Questo utente è già collaboratore del progetto")
             return
         }
 
-        // 3. Aggiungiamo l'utente a project_members
         const { error: erroreInserimento } = await supabase
             .from("project_members")
             .insert({
@@ -122,13 +102,11 @@ const Project = ({ project, utente, onBack, onLogout }) => {
             return
         }
 
-        // 4. Tutto ok!
         setMessaggioInvito(`✅ ${utenteTrovato.nome} aggiunto con successo!`)
         setEmailInvito("")
         fetchMembri()
     }
 
-    // --- NUOVO: rimuovere un collaboratore ---
     const rimuoviMembro = async (membroId) => {
         if (!window.confirm("Rimuovere questo collaboratore?")) return
         await supabase.from("project_members").delete().eq("id", membroId)
@@ -144,6 +122,21 @@ const Project = ({ project, utente, onBack, onLogout }) => {
     useEffect(() => {
         fetchTasks()
         fetchMembri()
+
+        // Aggiornamento in tempo reale dei task
+        const canale = supabase
+            .channel(`tasks-${project.id}`)
+            .on("postgres_changes", {
+                event: "*",
+                schema: "public",
+                table: "tasks",
+                filter: `project_id=eq.${project.id}`
+            }, () => {
+                fetchTasks()
+            })
+            .subscribe()
+
+        return () => supabase.removeChannel(canale)
     }, [])
 
     const statoColore = (stato) => {
@@ -164,8 +157,7 @@ const Project = ({ project, utente, onBack, onLogout }) => {
                     </button>
                     <h1 className="text-xl font-bold text-gray-800">{project.nome}</h1>
                 </div>
-                <div className="flex gap-2">
-                    {/* NUOVO: bottone collaboratori */}
+                <div className="flex gap-2 items-center">
                     <button
                         onClick={() => setShowCollaboratori(!showCollaboratori)}
                         className="bg-purple-500 text-white px-4 py-2 rounded-xl text-sm hover:bg-purple-600 transition-colors"
@@ -187,12 +179,10 @@ const Project = ({ project, utente, onBack, onLogout }) => {
                 </div>
             </header>
 
-            {/* NUOVO: pannello collaboratori — appare solo quando clicchi il bottone */}
             {showCollaboratori && (
                 <div className="bg-white border-b border-gray-100 px-6 py-4 max-w-4xl mx-auto mt-4 rounded-xl shadow-sm">
                     <h2 className="font-semibold text-gray-700 mb-3">Collaboratori del progetto</h2>
 
-                    {/* Form invito */}
                     <div className="flex gap-2 mb-3">
                         <input
                             type="email"
@@ -209,12 +199,10 @@ const Project = ({ project, utente, onBack, onLogout }) => {
                         </button>
                     </div>
 
-                    {/* Messaggio di feedback */}
                     {messaggioInvito && (
                         <p className="text-sm mb-3 text-gray-600">{messaggioInvito}</p>
                     )}
 
-                    {/* Lista membri */}
                     {membri.length === 0 ? (
                         <p className="text-sm text-gray-400">Nessun collaboratore ancora.</p>
                     ) : (
@@ -299,18 +287,26 @@ const Project = ({ project, utente, onBack, onLogout }) => {
                                             <span>👤 {task.assegnatarioNome}</span>
                                         )}
                                     </div>
-                                    <button
-                                        onClick={() => handleDelete(task.id)}
-                                        className="text-xs text-red-400 hover:text-red-600 transition-colors"
-                                    >
-                                        Elimina
-                                    </button>
+                                    <div className="flex items-center gap-3">
+                                        <button
+                                            onClick={() => setEditingTask(task)}
+                                            className="text-xs text-blue-400 hover:text-blue-600 transition-colors"
+                                        >
+                                            Modifica
+                                        </button>
+                                        <button
+                                            onClick={() => handleDelete(task.id)}
+                                            className="text-xs text-red-400 hover:text-red-600 transition-colors"
+                                        >
+                                            Elimina
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         ))}
                     </div>
                 )}
-                {/* Chat del progetto */}
+
                 <div className="mt-8">
                     <Chat project={project} utente={utente} />
                 </div>
@@ -322,6 +318,16 @@ const Project = ({ project, utente, onBack, onLogout }) => {
                     utente={utente}
                     onTaskAdded={fetchTasks}
                     onClose={() => setShowForm(false)}
+                />
+            )}
+
+            {editingTask && (
+                <TaskForm
+                    project={project}
+                    utente={utente}
+                    onTaskAdded={fetchTasks}
+                    onClose={() => setEditingTask(null)}
+                    task={editingTask}
                 />
             )}
         </div>

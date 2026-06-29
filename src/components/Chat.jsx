@@ -7,7 +7,6 @@ const Chat = ({ project, utente }) => {
     const [loading, setLoading] = useState(true)
     const fineChat = useRef(null)
 
-    // Carica i messaggi del progetto
     const fetchMessaggi = async () => {
         const { data: messaggiData } = await supabase
             .from("messages")
@@ -15,23 +14,23 @@ const Chat = ({ project, utente }) => {
             .eq("project_id", project.id)
             .order("created_at", { ascending: true })
 
-        // Per ogni messaggio carichiamo il nome di chi l'ha scritto
-        const messaggiConUtenti = await Promise.all(
-            (messaggiData ?? []).map(async (msg) => {
-                const { data: utenteData } = await supabase
-                    .from("users")
-                    .select("nome, cognome")
-                    .eq("id", msg.user_id)
-                    .single()
-                return { ...msg, utente: utenteData }
-            })
-        )
+        if (!messaggiData) { setLoading(false); return }
 
-        setMessaggi(messaggiConUtenti)
+        // Batch: una sola query per tutti gli utenti invece di N query
+        const userIds = [...new Set(messaggiData.map(m => m.user_id))]
+        let usersMap = {}
+        if (userIds.length > 0) {
+            const { data: usersData } = await supabase
+                .from("users")
+                .select("id, nome, cognome")
+                .in("id", userIds)
+            usersData?.forEach(u => { usersMap[u.id] = u })
+        }
+
+        setMessaggi(messaggiData.map(msg => ({ ...msg, utente: usersMap[msg.user_id] })))
         setLoading(false)
     }
 
-    // Invia un nuovo messaggio
     const inviaMessaggio = async () => {
         if (!nuovoMessaggio.trim()) return
 
@@ -45,7 +44,6 @@ const Chat = ({ project, utente }) => {
         fetchMessaggi()
     }
 
-    // Manda il messaggio premendo Invio
     const handleKeyDown = (e) => {
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault()
@@ -53,13 +51,10 @@ const Chat = ({ project, utente }) => {
         }
     }
 
-    // Scrolla automaticamente all'ultimo messaggio
     useEffect(() => {
         fineChat.current?.scrollIntoView({ behavior: "smooth" })
     }, [messaggi])
 
-    // Aggiorna i messaggi in tempo reale
-    // ogni volta che qualcuno scrive, la chat si aggiorna automaticamente
     useEffect(() => {
         fetchMessaggi()
 
@@ -75,7 +70,6 @@ const Chat = ({ project, utente }) => {
             })
             .subscribe()
 
-        // Quando il componente viene rimosso, chiudiamo il canale
         return () => supabase.removeChannel(canale)
     }, [])
 
@@ -88,14 +82,12 @@ const Chat = ({ project, utente }) => {
 
     return (
         <div className="flex flex-col h-96 bg-white rounded-xl border border-gray-100 shadow-sm">
-            {/* Header chat */}
             <div className="px-4 py-3 border-b border-gray-100">
                 <h3 className="font-semibold text-gray-700 text-sm">
                     💬 Chat del progetto
                 </h3>
             </div>
 
-            {/* Lista messaggi */}
             <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
                 {loading ? (
                     <p className="text-gray-400 text-sm text-center">Caricamento...</p>
@@ -105,7 +97,6 @@ const Chat = ({ project, utente }) => {
                     </p>
                 ) : (
                     messaggi.map(msg => {
-                        // Controlliamo se il messaggio è nostro o di qualcun altro
                         const isMio = msg.user_id === utente.id
 
                         return (
@@ -113,7 +104,6 @@ const Chat = ({ project, utente }) => {
                                 key={msg.id}
                                 className={`flex flex-col ${isMio ? "items-end" : "items-start"}`}
                             >
-                                {/* Nome mittente — solo per i messaggi degli altri */}
                                 {!isMio && (
                                     <span className="text-xs text-gray-400 mb-1 ml-1">
                                         {msg.utente?.nome} {msg.utente?.cognome}
@@ -121,13 +111,12 @@ const Chat = ({ project, utente }) => {
                                 )}
 
                                 <div className={`max-w-xs px-4 py-2 rounded-2xl text-sm ${isMio
-                                        ? "bg-blue-500 text-white rounded-br-none"
-                                        : "bg-gray-100 text-gray-800 rounded-bl-none"
+                                    ? "bg-blue-500 text-white rounded-br-none"
+                                    : "bg-gray-100 text-gray-800 rounded-bl-none"
                                     }`}>
                                     {msg.contenuto}
                                 </div>
 
-                                {/* Ora del messaggio */}
                                 <span className="text-xs text-gray-300 mt-1">
                                     {formatOra(msg.created_at)}
                                 </span>
@@ -135,11 +124,9 @@ const Chat = ({ project, utente }) => {
                         )
                     })
                 )}
-                {/* Elemento invisibile per lo scroll automatico */}
                 <div ref={fineChat} />
             </div>
 
-            {/* Input messaggio */}
             <div className="px-4 py-3 border-t border-gray-100 flex gap-2">
                 <input
                     type="text"

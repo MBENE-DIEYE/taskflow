@@ -8,14 +8,41 @@ const Dashboard = ({ utente, onLogout, onSelectProject }) => {
     const [loading, setLoading] = useState(true)
 
     const fetchProjects = async () => {
-        const { data, error } = await supabase
+        // Progetti di cui sei proprietario
+        const { data: owned } = await supabase
             .from("projects")
             .select("*, tasks(stato)")
             .eq("user_id", utente.id)
 
-        if (error) console.error(error)
-        else setProjects(data ?? [])
+        // ID dei progetti dove sei collaboratore
+        const { data: memberships } = await supabase
+            .from("project_members")
+            .select("project_id")
+            .eq("user_id", utente.id)
+
+        const memberIds = (memberships ?? []).map(m => m.project_id)
+
+        let shared = []
+        if (memberIds.length > 0) {
+            const { data } = await supabase
+                .from("projects")
+                .select("*, tasks(stato)")
+                .in("id", memberIds)
+            shared = data ?? []
+        }
+
+        // Combina e deduplica (un proprietario potrebbe anche essere in project_members)
+        const all = [...(owned ?? []), ...shared]
+        const unique = all.filter((p, i, arr) => arr.findIndex(x => x.id === p.id) === i)
+        setProjects(unique)
         setLoading(false)
+    }
+
+    const handleDeleteProject = async (e, projectId) => {
+        e.stopPropagation()
+        if (!window.confirm("Eliminare questo progetto? Tutti i task verranno eliminati.")) return
+        await supabase.from("projects").delete().eq("id", projectId)
+        fetchProjects()
     }
 
     useEffect(() => {
@@ -68,7 +95,17 @@ const Dashboard = ({ utente, onLogout, onSelectProject }) => {
                                     onClick={() => onSelectProject(project)}
                                     className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 cursor-pointer hover:shadow-md transition-shadow"
                                 >
-                                    <h3 className="text-lg font-semibold text-gray-800 mb-1">{project.nome}</h3>
+                                    <div className="flex items-start justify-between mb-1">
+                                        <h3 className="text-lg font-semibold text-gray-800">{project.nome}</h3>
+                                        {project.user_id === utente.id && (
+                                            <button
+                                                onClick={(e) => handleDeleteProject(e, project.id)}
+                                                className="text-xs text-red-400 hover:text-red-600 transition-colors ml-2 shrink-0"
+                                            >
+                                                Elimina
+                                            </button>
+                                        )}
+                                    </div>
                                     <p className="text-sm text-gray-500 mb-4">{project.description}</p>
 
                                     <div className="flex items-center gap-3 text-xs">

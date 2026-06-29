@@ -1,18 +1,18 @@
 import { useState, useEffect } from "react"
 import { supabase } from "../supabase"
 
-const TaskForm = ({ project, utente, onTaskAdded, onClose }) => {
-    const [titolo, setTitolo] = useState("")
-    const [description, setDescription] = useState("")
-    const [scadenza, setScadenza] = useState("")
-    const [priorita, setPriorita] = useState("media")
-    const [assegnatoA, setAssegnatoA] = useState("")
+const TaskForm = ({ project, utente, onTaskAdded, onClose, task }) => {
+    const editMode = !!task
+
+    const [titolo, setTitolo] = useState(task?.titolo ?? "")
+    const [description, setDescription] = useState(task?.description ?? "")
+    const [scadenza, setScadenza] = useState(task?.scadenza ?? "")
+    const [priorita, setPriorita] = useState(task?.priorita ?? "media")
+    const [assegnatoA, setAssegnatoA] = useState(task?.assegnato_a ?? "")
     const [collaboratori, setCollaboratori] = useState([])
     const [loading, setLoading] = useState(false)
     const [errore, setErrore] = useState("")
 
-    // Carichiamo i collaboratori del progetto
-    // così possiamo scegliere a chi assegnare la task
     useEffect(() => {
         const fetchCollaboratori = async () => {
             const { data: membriData } = await supabase
@@ -20,17 +20,17 @@ const TaskForm = ({ project, utente, onTaskAdded, onClose }) => {
                 .select("*")
                 .eq("project_id", project.id)
 
-            const membriConUtenti = await Promise.all(
-                (membriData ?? []).map(async (membro) => {
-                    const { data: utenteData } = await supabase
-                        .from("users")
-                        .select("id, nome, cognome")
-                        .eq("id", membro.user_id)
-                        .single()
-                    return { ...membro, users: utenteData }
-                })
-            )
-            setCollaboratori(membriConUtenti)
+            const userIds = (membriData ?? []).map(m => m.user_id)
+            let usersMap = {}
+            if (userIds.length > 0) {
+                const { data: usersData } = await supabase
+                    .from("users")
+                    .select("id, nome, cognome")
+                    .in("id", userIds)
+                usersData?.forEach(u => { usersMap[u.id] = u })
+            }
+
+            setCollaboratori((membriData ?? []).map(m => ({ ...m, users: usersMap[m.user_id] })))
         }
         fetchCollaboratori()
     }, [])
@@ -40,44 +40,59 @@ const TaskForm = ({ project, utente, onTaskAdded, onClose }) => {
         setLoading(true)
         setErrore("")
 
-        const { error } = await supabase
-            .from("tasks")
-            .insert({
-                titolo,
-                description,
-                scadenza: scadenza || null,
-                priorita,
-                assegnato_a: assegnatoA || null,
-                project_id: project.id,
-                user_id: utente.id,
-                stato: "da_fare"
-            })
-
-        if (error) {
-            setErrore(error.message)
-            setLoading(false)
-            return
+        const payload = {
+            titolo,
+            description,
+            scadenza: scadenza || null,
+            priorita,
+            assegnato_a: assegnatoA || null
         }
 
-        // Se c'è un assegnatario mandiamo l'email automatica
-        if (assegnatoA) {
-            // Troviamo l'email dell'assegnatario
-            const { data: assegnatarioData } = await supabase
-                .from("users")
-                .select("nome, cognome, email")
-                .eq("id", assegnatoA)
-                .single()
+        if (editMode) {
+            const { error } = await supabase
+                .from("tasks")
+                .update(payload)
+                .eq("id", task.id)
 
-            if (assegnatarioData) {
-                // Chiamiamo la Edge Function di Supabase
-                await supabase.functions.invoke("invia-email", {
-                    body: {
-                        titolo,
-                        assegnatarioEmail: assegnatarioData.email,
-                        assegnatarioNome: assegnatarioData.nome,
-                        progetto: project.nome
-                    }
+            if (error) {
+                setErrore(error.message)
+                setLoading(false)
+                return
+            }
+        } else {
+            const { error } = await supabase
+                .from("tasks")
+                .insert({
+                    ...payload,
+                    project_id: project.id,
+                    user_id: utente.id,
+                    stato: "da_fare"
                 })
+
+            if (error) {
+                setErrore(error.message)
+                setLoading(false)
+                return
+            }
+
+            // Email di notifica solo alla creazione con assegnatario
+            if (assegnatoA) {
+                const { data: assegnatarioData } = await supabase
+                    .from("users")
+                    .select("nome, cognome, email")
+                    .eq("id", assegnatoA)
+                    .single()
+
+                if (assegnatarioData) {
+                    await supabase.functions.invoke("invia-email", {
+                        body: {
+                            titolo,
+                            assegnatarioEmail: assegnatarioData.email,
+                            assegnatarioNome: assegnatarioData.nome,
+                            progetto: project.nome
+                        }
+                    })
+                }
             }
         }
 
@@ -86,7 +101,6 @@ const TaskForm = ({ project, utente, onTaskAdded, onClose }) => {
         setLoading(false)
     }
 
-    // Colori per la priorità
     const prioritaColore = {
         alta: "text-red-500",
         media: "text-yellow-500",
@@ -96,7 +110,9 @@ const TaskForm = ({ project, utente, onTaskAdded, onClose }) => {
     return (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
             <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-xl">
-                <h2 className="text-xl font-semibold text-gray-800 mb-6">Nuovo task</h2>
+                <h2 className="text-xl font-semibold text-gray-800 mb-6">
+                    {editMode ? "Modifica task" : "Nuovo task"}
+                </h2>
 
                 {errore && (
                     <div className="bg-red-50 text-red-500 text-sm px-4 py-3 rounded-xl mb-4">
@@ -121,7 +137,6 @@ const TaskForm = ({ project, utente, onTaskAdded, onClose }) => {
                         className="px-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
                     />
 
-                    {/* Data scadenza */}
                     <div>
                         <label className="text-xs text-gray-400 mb-1 block">📅 Scadenza</label>
                         <input
@@ -132,7 +147,6 @@ const TaskForm = ({ project, utente, onTaskAdded, onClose }) => {
                         />
                     </div>
 
-                    {/* Priorità — NUOVO */}
                     <div>
                         <label className="text-xs text-gray-400 mb-1 block">🎯 Priorità</label>
                         <select
@@ -146,7 +160,6 @@ const TaskForm = ({ project, utente, onTaskAdded, onClose }) => {
                         </select>
                     </div>
 
-                    {/* Assegnatario — NUOVO */}
                     <div>
                         <label className="text-xs text-gray-400 mb-1 block">👤 Assegna a</label>
                         <select
@@ -155,11 +168,9 @@ const TaskForm = ({ project, utente, onTaskAdded, onClose }) => {
                             className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-300"
                         >
                             <option value="">— Nessuno —</option>
-                            {/* L'utente corrente (te stessa) */}
                             <option value={utente.id}>
                                 {utente.nome} {utente.cognome} (tu)
                             </option>
-                            {/* I collaboratori del progetto */}
                             {collaboratori.map(membro => (
                                 <option key={membro.id} value={membro.user_id}>
                                     {membro.users?.nome} {membro.users?.cognome}
@@ -181,7 +192,7 @@ const TaskForm = ({ project, utente, onTaskAdded, onClose }) => {
                             disabled={loading}
                             className="flex-1 bg-blue-500 text-white px-4 py-2 rounded-xl hover:bg-blue-600 transition-colors disabled:opacity-50"
                         >
-                            {loading ? "Salvataggio..." : "Crea task"}
+                            {loading ? "Salvataggio..." : editMode ? "Salva modifiche" : "Crea task"}
                         </button>
                     </div>
                 </form>
