@@ -5,6 +5,8 @@ const Chat = ({ project, utente }) => {
     const [messaggi, setMessaggi] = useState([])
     const [nuovoMessaggio, setNuovoMessaggio] = useState("")
     const [loading, setLoading] = useState(true)
+    const [erroreChat, setErroreChat] = useState("")
+    const [loadingInvio, setLoadingInvio] = useState(false)
     const fineChat = useRef(null)
 
     const fetchMessaggi = async () => {
@@ -33,14 +35,23 @@ const Chat = ({ project, utente }) => {
 
     const inviaMessaggio = async () => {
         if (!nuovoMessaggio.trim()) return
+        setLoadingInvio(true)
+        setErroreChat("")
 
-        await supabase.from("messages").insert({
+        const { error } = await supabase.from("messages").insert({
             contenuto: nuovoMessaggio,
             project_id: project.id,
             user_id: utente.id
         })
 
+        if (error) {
+            setErroreChat("Errore nell'invio del messaggio. Riprova.")
+            setLoadingInvio(false)
+            return
+        }
+
         setNuovoMessaggio("")
+        setLoadingInvio(false)
         fetchMessaggi()
     }
 
@@ -127,6 +138,9 @@ const Chat = ({ project, utente }) => {
                 <div ref={fineChat} />
             </div>
 
+            {erroreChat && (
+                <p className="px-4 pb-1 text-xs text-red-500">{erroreChat}</p>
+            )}
             <div className="px-4 py-3 border-t border-gray-100 flex gap-2">
                 <input
                     type="text"
@@ -134,13 +148,15 @@ const Chat = ({ project, utente }) => {
                     value={nuovoMessaggio}
                     onChange={e => setNuovoMessaggio(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    className="flex-1 px-4 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    disabled={loadingInvio}
+                    className="flex-1 px-4 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-50"
                 />
                 <button
                     onClick={inviaMessaggio}
-                    className="bg-blue-500 text-white px-4 py-2 rounded-xl text-sm hover:bg-blue-600 transition-colors"
+                    disabled={loadingInvio}
+                    className="bg-blue-500 text-white px-4 py-2 rounded-xl text-sm hover:bg-blue-600 transition-colors disabled:opacity-50"
                 >
-                    Invia
+                    {loadingInvio ? "..." : "Invia"}
                 </button>
             </div>
         </div>

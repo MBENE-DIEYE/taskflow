@@ -3,15 +3,24 @@ import { supabase } from "../supabase"
 import TaskForm from "../components/TaskForm"
 import Chat from "../components/Chat"
 
+const formatData = (data) =>
+    data ? new Date(data + "T00:00:00").toLocaleDateString("it-IT") : null
+
 const Project = ({ project, utente, onBack, onLogout }) => {
     const [tasks, setTasks] = useState([])
     const [showForm, setShowForm] = useState(false)
     const [editingTask, setEditingTask] = useState(null)
     const [loading, setLoading] = useState(true)
+    const [errore, setErrore] = useState("")
+    const [deletingId, setDeletingId] = useState(null)
+
+    const [filtroStato, setFiltroStato] = useState("tutti")
+    const [filtroPriorita, setFiltroPriorita] = useState("tutte")
 
     const [membri, setMembri] = useState([])
     const [emailInvito, setEmailInvito] = useState("")
     const [messaggioInvito, setMessaggioInvito] = useState("")
+    const [loadingInvito, setLoadingInvito] = useState(false)
     const [showCollaboratori, setShowCollaboratori] = useState(false)
 
     const fetchTasks = async () => {
@@ -21,9 +30,12 @@ const Project = ({ project, utente, onBack, onLogout }) => {
             .eq("project_id", project.id)
             .order("created_at", { ascending: false })
 
-        if (error) { console.error(error); setLoading(false); return }
+        if (error) {
+            setErrore("Errore nel caricamento dei task. Riprova.")
+            setLoading(false)
+            return
+        }
 
-        // Batch: una sola query per assegnatari E creatori insieme
         const assigneeIds = (data ?? []).filter(t => t.assegnato_a).map(t => t.assegnato_a)
         const creatorIds = (data ?? []).map(t => t.user_id)
         const allUserIds = [...new Set([...assigneeIds, ...creatorIds])]
@@ -42,6 +54,7 @@ const Project = ({ project, utente, onBack, onLogout }) => {
             assegnatarioNome: t.assegnato_a ? usersMap[t.assegnato_a] : null,
             creatoreNome: usersMap[t.user_id] ?? null
         })))
+        setErrore("")
         setLoading(false)
     }
 
@@ -51,9 +64,8 @@ const Project = ({ project, utente, onBack, onLogout }) => {
             .select("*")
             .eq("project_id", project.id)
 
-        if (error) { console.error(error); return }
+        if (error) return
 
-        // Batch: una sola query per tutti gli utenti
         const userIds = (membriData ?? []).map(m => m.user_id)
         let usersMap = {}
         if (userIds.length > 0) {
@@ -69,12 +81,12 @@ const Project = ({ project, utente, onBack, onLogout }) => {
 
     const invitaCollaboratore = async () => {
         setMessaggioInvito("")
-
         if (!emailInvito.trim()) {
             setMessaggioInvito("Inserisci un'email valida")
             return
         }
 
+        setLoadingInvito(true)
         const { data: utenteTrovato, error: erroreRicerca } = await supabase
             .from("users")
             .select("id, nome, email")
@@ -83,43 +95,51 @@ const Project = ({ project, utente, onBack, onLogout }) => {
 
         if (erroreRicerca || !utenteTrovato) {
             setMessaggioInvito("Nessun utente trovato con questa email")
+            setLoadingInvito(false)
             return
         }
 
         const giaPresente = membri.find(m => m.user_id === utenteTrovato.id)
         if (giaPresente) {
             setMessaggioInvito("Questo utente è già collaboratore del progetto")
+            setLoadingInvito(false)
             return
         }
 
         const { error: erroreInserimento } = await supabase
             .from("project_members")
-            .insert({
-                project_id: project.id,
-                user_id: utenteTrovato.id,
-                ruolo: "membro"
-            })
+            .insert({ project_id: project.id, user_id: utenteTrovato.id, ruolo: "membro" })
 
         if (erroreInserimento) {
             setMessaggioInvito("Errore durante l'aggiunta del collaboratore")
-            console.error(erroreInserimento)
+            setLoadingInvito(false)
             return
         }
 
         setMessaggioInvito(`✅ ${utenteTrovato.nome} aggiunto con successo!`)
         setEmailInvito("")
+        setLoadingInvito(false)
         fetchMembri()
     }
 
     const rimuoviMembro = async (membroId) => {
         if (!window.confirm("Rimuovere questo collaboratore?")) return
-        await supabase.from("project_members").delete().eq("id", membroId)
+        const { error } = await supabase.from("project_members").delete().eq("id", membroId)
+        if (error) {
+            alert("Errore durante la rimozione del collaboratore")
+            return
+        }
         fetchMembri()
     }
 
     const handleDelete = async (id) => {
         if (!window.confirm("Sei sicuro di voler eliminare questo task?")) return
-        await supabase.from("tasks").delete().eq("id", id)
+        setDeletingId(id)
+        const { error } = await supabase.from("tasks").delete().eq("id", id)
+        if (error) {
+            alert("Errore durante l'eliminazione del task")
+        }
+        setDeletingId(null)
         fetchTasks()
     }
 
@@ -127,7 +147,6 @@ const Project = ({ project, utente, onBack, onLogout }) => {
         fetchTasks()
         fetchMembri()
 
-        // Aggiornamento in tempo reale dei task
         const canale = supabase
             .channel(`tasks-${project.id}`)
             .on("postgres_changes", {
@@ -135,9 +154,7 @@ const Project = ({ project, utente, onBack, onLogout }) => {
                 schema: "public",
                 table: "tasks",
                 filter: `project_id=eq.${project.id}`
-            }, () => {
-                fetchTasks()
-            })
+            }, () => { fetchTasks() })
             .subscribe()
 
         return () => supabase.removeChannel(canale)
@@ -148,6 +165,12 @@ const Project = ({ project, utente, onBack, onLogout }) => {
         if (stato === "in_corso") return "bg-yellow-100 text-yellow-600"
         return "bg-gray-100 text-gray-600"
     }
+
+    const taskFiltrati = tasks.filter(t => {
+        if (filtroStato !== "tutti" && t.stato !== filtroStato) return false
+        if (filtroPriorita !== "tutte" && t.priorita !== filtroPriorita) return false
+        return true
+    })
 
     return (
         <div className="min-h-screen bg-gray-50">
@@ -186,7 +209,6 @@ const Project = ({ project, utente, onBack, onLogout }) => {
             {showCollaboratori && (
                 <div className="bg-white border-b border-gray-100 px-6 py-4 max-w-4xl mx-auto mt-4 rounded-xl shadow-sm">
                     <h2 className="font-semibold text-gray-700 mb-3">Collaboratori del progetto</h2>
-
                     <div className="flex gap-2 mb-3">
                         <input
                             type="email"
@@ -197,16 +219,15 @@ const Project = ({ project, utente, onBack, onLogout }) => {
                         />
                         <button
                             onClick={invitaCollaboratore}
-                            className="bg-purple-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-purple-600 transition-colors"
+                            disabled={loadingInvito}
+                            className="bg-purple-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-purple-600 transition-colors disabled:opacity-50"
                         >
-                            Aggiungi
+                            {loadingInvito ? "..." : "Aggiungi"}
                         </button>
                     </div>
-
                     {messaggioInvito && (
                         <p className="text-sm mb-3 text-gray-600">{messaggioInvito}</p>
                     )}
-
                     {membri.length === 0 ? (
                         <p className="text-sm text-gray-400">Nessun collaboratore ancora.</p>
                     ) : (
@@ -217,9 +238,7 @@ const Project = ({ project, utente, onBack, onLogout }) => {
                                         <span className="text-sm font-medium text-gray-700">
                                             {membro.users?.nome} {membro.users?.cognome}
                                         </span>
-                                        <span className="text-xs text-gray-400 ml-2">
-                                            {membro.users?.email}
-                                        </span>
+                                        <span className="text-xs text-gray-400 ml-2">{membro.users?.email}</span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <span className="text-xs bg-purple-100 text-purple-600 px-2 py-1 rounded-full">
@@ -244,26 +263,77 @@ const Project = ({ project, utente, onBack, onLogout }) => {
                     <p className="text-gray-500 text-sm mb-6">{project.description}</p>
                 )}
 
+                {errore && (
+                    <div className="bg-red-50 text-red-500 text-sm px-4 py-3 rounded-xl mb-6">
+                        {errore}
+                        <button onClick={fetchTasks} className="ml-2 underline">Riprova</button>
+                    </div>
+                )}
+
+                {/* Filtri */}
+                {!loading && tasks.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-6">
+                        <div className="flex gap-1">
+                            {["tutti", "da_fare", "in_corso", "completato"].map(s => (
+                                <button
+                                    key={s}
+                                    onClick={() => setFiltroStato(s)}
+                                    className={`text-xs px-3 py-1.5 rounded-full transition-colors ${
+                                        filtroStato === s
+                                            ? "bg-blue-500 text-white"
+                                            : "bg-white text-gray-500 border border-gray-200 hover:border-blue-300"
+                                    }`}
+                                >
+                                    {s === "tutti" ? "Tutti" : s === "da_fare" ? "Da fare" : s === "in_corso" ? "In corso" : "Completati"}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="flex gap-1">
+                            {["tutte", "alta", "media", "bassa"].map(p => (
+                                <button
+                                    key={p}
+                                    onClick={() => setFiltroPriorita(p)}
+                                    className={`text-xs px-3 py-1.5 rounded-full transition-colors ${
+                                        filtroPriorita === p
+                                            ? "bg-gray-700 text-white"
+                                            : "bg-white text-gray-500 border border-gray-200 hover:border-gray-400"
+                                    }`}
+                                >
+                                    {p === "tutte" ? "Tutte le priorità" : p === "alta" ? "🔴 Alta" : p === "media" ? "🟡 Media" : "🟢 Bassa"}
+                                </button>
+                            ))}
+                        </div>
+                        {(filtroStato !== "tutti" || filtroPriorita !== "tutte") && (
+                            <button
+                                onClick={() => { setFiltroStato("tutti"); setFiltroPriorita("tutte") }}
+                                className="text-xs px-3 py-1.5 text-gray-400 hover:text-gray-600 underline"
+                            >
+                                Rimuovi filtri
+                            </button>
+                        )}
+                    </div>
+                )}
+
                 {loading ? (
                     <p className="text-gray-400 text-center mt-12">Caricamento...</p>
-                ) : tasks.length === 0 ? (
+                ) : taskFiltrati.length === 0 ? (
                     <p className="text-gray-400 text-center mt-12">
-                        Nessun task ancora — creane uno !
+                        {tasks.length === 0 ? "Nessun task ancora — creane uno !" : "Nessun task corrisponde ai filtri selezionati."}
                     </p>
                 ) : (
                     <div className="flex flex-col gap-4">
-                        {tasks.map(task => (
+                        {taskFiltrati.map(task => (
                             <div key={task.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                                 <div className="flex items-center justify-between mb-2">
                                     <h3 className="font-semibold text-gray-800">{task.titolo}</h3>
                                     <select
                                         value={task.stato}
                                         onChange={async (e) => {
-                                            await supabase
+                                            const { error } = await supabase
                                                 .from("tasks")
                                                 .update({ stato: e.target.value })
                                                 .eq("id", task.id)
-                                            fetchTasks()
+                                            if (!error) fetchTasks()
                                         }}
                                         className={`text-xs px-3 py-1 rounded-full font-medium border-0 cursor-pointer ${statoColore(task.stato)}`}
                                     >
@@ -277,22 +347,17 @@ const Project = ({ project, utente, onBack, onLogout }) => {
                                 )}
                                 <div className="flex items-center justify-between mt-3">
                                     <div className="flex items-center gap-4 text-xs text-gray-400">
-                                        {task.scadenza && <span>📅 {task.scadenza}</span>}
+                                        {task.scadenza && <span>📅 {formatData(task.scadenza)}</span>}
                                         {task.priorita && (
-                                            <span className={`font-medium ${task.priorita === "alta" ? "text-red-500" :
-                                                task.priorita === "media" ? "text-yellow-500" :
-                                                    "text-green-500"
-                                                }`}>
-                                                {task.priorita === "alta" ? "🔴" :
-                                                    task.priorita === "media" ? "🟡" : "🟢"} {task.priorita}
+                                            <span className={`font-medium ${
+                                                task.priorita === "alta" ? "text-red-500" :
+                                                task.priorita === "media" ? "text-yellow-500" : "text-green-500"
+                                            }`}>
+                                                {task.priorita === "alta" ? "🔴" : task.priorita === "media" ? "🟡" : "🟢"} {task.priorita}
                                             </span>
                                         )}
-                                        {task.assegnatarioNome && (
-                                            <span>👤 a {task.assegnatarioNome}</span>
-                                        )}
-                                        {task.creatoreNome && (
-                                            <span>✏️ da {task.creatoreNome}</span>
-                                        )}
+                                        {task.assegnatarioNome && <span>👤 a {task.assegnatarioNome}</span>}
+                                        {task.creatoreNome && <span>✏️ da {task.creatoreNome}</span>}
                                     </div>
                                     <div className="flex items-center gap-3">
                                         <button
@@ -303,9 +368,10 @@ const Project = ({ project, utente, onBack, onLogout }) => {
                                         </button>
                                         <button
                                             onClick={() => handleDelete(task.id)}
-                                            className="text-xs text-red-400 hover:text-red-600 transition-colors"
+                                            disabled={deletingId === task.id}
+                                            className="text-xs text-red-400 hover:text-red-600 transition-colors disabled:opacity-50"
                                         >
-                                            Elimina
+                                            {deletingId === task.id ? "..." : "Elimina"}
                                         </button>
                                     </div>
                                 </div>
@@ -327,7 +393,6 @@ const Project = ({ project, utente, onBack, onLogout }) => {
                     onClose={() => setShowForm(false)}
                 />
             )}
-
             {editingTask && (
                 <TaskForm
                     project={project}

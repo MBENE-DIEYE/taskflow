@@ -97,7 +97,7 @@ const Dashboard = ({ utente, onLogout, onSelectProject }) => {
                                         <div>
                                             <p className="font-medium text-gray-800 text-sm">{task.titolo}</p>
                                             <p className="text-xs text-gray-400 mt-1">📁 {task.projects?.nome}</p>
-                                            {task.scadenza && <p className="text-xs text-gray-400 mt-1">📅 {task.scadenza}</p>}
+                                            {task.scadenza && <p className="text-xs text-gray-400 mt-1">📅 {new Date(task.scadenza + "T00:00:00").toLocaleDateString("it-IT")}</p>}
                                         </div>
                                         <span className={`text-xs px-3 py-1 rounded-full font-medium shrink-0 ml-4 ${
                                             task.stato === "in_corso" ? "bg-yellow-100 text-yellow-600" : "bg-gray-100 text-gray-600"
