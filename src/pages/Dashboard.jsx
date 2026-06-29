@@ -20,33 +20,33 @@ const Dashboard = ({ utente, onLogout, onSelectProject }) => {
     }
 
     const fetchProjects = async () => {
-        // Progetti di cui sei proprietario
+        // Progetti di cui sei proprietario (sempre visibili)
         const { data: owned } = await supabase
             .from("projects")
             .select("*, tasks(stato)")
             .eq("user_id", utente.id)
 
-        // ID dei progetti dove sei collaboratore
-        const { data: memberships } = await supabase
-            .from("project_members")
-            .select("project_id")
-            .eq("user_id", utente.id)
+        const ownedIds = (owned ?? []).map(p => p.id)
 
-        const memberIds = (memberships ?? []).map(m => m.project_id)
+        // Progetti dove hai almeno un task assegnato a te (e non sei il proprietario)
+        const { data: myTasks } = await supabase
+            .from("tasks")
+            .select("project_id")
+            .eq("assegnato_a", utente.id)
+
+        const sharedIds = [...new Set((myTasks ?? []).map(t => t.project_id))]
+            .filter(id => !ownedIds.includes(id))
 
         let shared = []
-        if (memberIds.length > 0) {
+        if (sharedIds.length > 0) {
             const { data } = await supabase
                 .from("projects")
                 .select("*, tasks(stato)")
-                .in("id", memberIds)
+                .in("id", sharedIds)
             shared = data ?? []
         }
 
-        // Combina e deduplica (un proprietario potrebbe anche essere in project_members)
-        const all = [...(owned ?? []), ...shared]
-        const unique = all.filter((p, i, arr) => arr.findIndex(x => x.id === p.id) === i)
-        setProjects(unique)
+        setProjects([...(owned ?? []), ...shared])
         setLoading(false)
     }
 
