@@ -5,6 +5,7 @@ import ProjectForm from "../components/ProjectForm"
 const Dashboard = ({ utente, onLogout, onSelectProject }) => {
     const [projects, setProjects] = useState([])
     const [taskAssegnati, setTaskAssegnati] = useState([])
+    const [showTaskAssegnati, setShowTaskAssegnati] = useState(false)
     const [showForm, setShowForm] = useState(false)
     const [loading, setLoading] = useState(true)
 
@@ -79,23 +80,34 @@ const Dashboard = ({ utente, onLogout, onSelectProject }) => {
             <main className="max-w-4xl mx-auto px-4 py-8">
                 {taskAssegnati.length > 0 && (
                     <div className="mb-10">
-                        <h2 className="text-xl font-semibold text-gray-800 mb-4">📌 Task assegnati a te</h2>
-                        <div className="flex flex-col gap-3">
-                            {taskAssegnati.map(task => (
-                                <div key={task.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex items-center justify-between">
-                                    <div>
-                                        <p className="font-medium text-gray-800 text-sm">{task.titolo}</p>
-                                        <p className="text-xs text-gray-400 mt-1">📁 {task.projects?.nome}</p>
-                                        {task.scadenza && <p className="text-xs text-gray-400 mt-1">📅 {task.scadenza}</p>}
+                        <button
+                            onClick={() => setShowTaskAssegnati(!showTaskAssegnati)}
+                            className="flex items-center gap-2 mb-4 hover:opacity-80 transition-opacity"
+                        >
+                            <span className="text-xl font-semibold text-gray-800">📌 Task assegnati a te</span>
+                            <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-medium">
+                                {taskAssegnati.length}
+                            </span>
+                            <span className="text-xs text-gray-400">{showTaskAssegnati ? "▲" : "▼"}</span>
+                        </button>
+                        {showTaskAssegnati && (
+                            <div className="flex flex-col gap-3">
+                                {taskAssegnati.map(task => (
+                                    <div key={task.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex items-center justify-between">
+                                        <div>
+                                            <p className="font-medium text-gray-800 text-sm">{task.titolo}</p>
+                                            <p className="text-xs text-gray-400 mt-1">📁 {task.projects?.nome}</p>
+                                            {task.scadenza && <p className="text-xs text-gray-400 mt-1">📅 {task.scadenza}</p>}
+                                        </div>
+                                        <span className={`text-xs px-3 py-1 rounded-full font-medium shrink-0 ml-4 ${
+                                            task.stato === "in_corso" ? "bg-yellow-100 text-yellow-600" : "bg-gray-100 text-gray-600"
+                                        }`}>
+                                            {task.stato === "in_corso" ? "in corso" : "da fare"}
+                                        </span>
                                     </div>
-                                    <span className={`text-xs px-3 py-1 rounded-full font-medium shrink-0 ml-4 ${
-                                        task.stato === "in_corso" ? "bg-yellow-100 text-yellow-600" : "bg-gray-100 text-gray-600"
-                                    }`}>
-                                        {task.stato === "in_corso" ? "in corso" : "da fare"}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
 
