@@ -3,6 +3,7 @@ import { supabase } from "./supabase"
 import Login from "./pages/Login"
 import Dashboard from "./pages/Dashboard"
 import Project from "./pages/Project"
+import ResetPassword from "./pages/ResetPassword"
 
 const App = () => {
   const [page, setPage] = useState("login")
@@ -26,6 +27,16 @@ const App = () => {
       }
       setLoading(false)
     })
+
+    // Intercetta il link di recupero password dall'email
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setPage("reset-password")
+        setLoading(false)
+      }
+    })
+
+    return () => subscription.unsubscribe()
   }, [])
 
   const handleLogin = (user) => {
@@ -69,6 +80,9 @@ const App = () => {
           onBack={() => setPage("dashboard")}
           onLogout={handleLogout}
         />
+      )}
+      {page === "reset-password" && (
+        <ResetPassword onComplete={() => setPage("login")} />
       )}
     </div>
   )

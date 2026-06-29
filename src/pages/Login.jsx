@@ -10,6 +10,24 @@ const Login = ({ onLogin }) => {
     const [loading, setLoading] = useState(false)
     const [errore, setErrore] = useState("")
     const [mostraPassword, setMostraPassword] = useState(false)
+    const [isRecupero, setIsRecupero] = useState(false)
+    const [emailRecupero, setEmailRecupero] = useState("")
+    const [messaggioRecupero, setMessaggioRecupero] = useState("")
+
+    const handleRecupero = async (e) => {
+        e.preventDefault()
+        setLoading(true)
+        setErrore("")
+        const { error } = await supabase.auth.resetPasswordForEmail(emailRecupero, {
+            redirectTo: window.location.origin
+        })
+        if (error) {
+            setErrore(error.message)
+        } else {
+            setMessaggioRecupero("Email inviata! Controlla la tua casella di posta.")
+        }
+        setLoading(false)
+    }
 
     const handleSubmit = async (e) => {
         e.preventDefault()
@@ -51,6 +69,55 @@ const Login = ({ onLogin }) => {
         }
 
         setLoading(false)
+    }
+
+    if (isRecupero) {
+        return (
+            <div className='min-h-screen bg-gray-50 flex items-center justify-center'>
+                <div className='bg-white rounded-2xl shadow-sm border border-gray-100 p-8 w-full max-w-md'>
+                    <h1 className='text-2xl font-bold text-gray-800 mb-2'>Recupera password</h1>
+                    <p className='text-gray-500 text-sm mb-6'>
+                        Inserisci la tua email e ti mandiamo un link per reimpostare la password.
+                    </p>
+
+                    {errore && (
+                        <div className='bg-red-50 text-red-500 text-sm px-4 py-3 rounded-xl mb-4'>{errore}</div>
+                    )}
+                    {messaggioRecupero ? (
+                        <div className='bg-green-50 text-green-600 text-sm px-4 py-3 rounded-xl mb-4'>
+                            {messaggioRecupero}
+                        </div>
+                    ) : (
+                        <form onSubmit={handleRecupero} className='flex flex-col gap-4'>
+                            <input
+                                type="email"
+                                name="email"
+                                placeholder="La tua email"
+                                value={emailRecupero}
+                                onChange={e => setEmailRecupero(e.target.value)}
+                                required
+                                autoComplete="email"
+                                className="px-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                            />
+                            <button
+                                type='submit'
+                                disabled={loading}
+                                className='bg-blue-500 text-white px-6 py-2 rounded-xl hover:bg-blue-600 transition-colors disabled:opacity-50'
+                            >
+                                {loading ? "Invio..." : "Invia link di recupero"}
+                            </button>
+                        </form>
+                    )}
+
+                    <p className="text-sm text-gray-500 text-center mt-4">
+                        <button onClick={() => { setIsRecupero(false); setErrore(""); setMessaggioRecupero("") }}
+                            className="text-blue-500 hover:underline">
+                            ← Torna al login
+                        </button>
+                    </p>
+                </div>
+            </div>
+        )
     }
 
     return (
@@ -150,6 +217,17 @@ const Login = ({ onLogin }) => {
                         {isRegistro ? "Accedi" : "Registrati"}
                     </button>
                 </p>
+
+                {!isRegistro && (
+                    <p className="text-sm text-gray-500 text-center mt-2">
+                        <button
+                            onClick={() => { setIsRecupero(true); setErrore("") }}
+                            className="text-gray-400 hover:text-blue-500 hover:underline transition-colors"
+                        >
+                            Password dimenticata?
+                        </button>
+                    </p>
+                )}
             </div>
         </div>
     )
