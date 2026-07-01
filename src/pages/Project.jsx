@@ -216,7 +216,7 @@ const Project = ({ project, utente, onBack, onLogout }) => {
             onDragEnd={handleDragEnd}
             className={`group bg-white rounded-lg px-3 py-2.5 border border-gray-100 shadow-sm cursor-grab active:cursor-grabbing hover:shadow hover:border-gray-200 transition-all select-none ${draggingId === task.id ? "opacity-40" : ""}`}
         >
-            <div className="flex items-start gap-1.5">
+            <div className="flex items-start gap-1">
                 <div className="flex-1 min-w-0">
                     <span className="text-[13px] text-gray-700 leading-snug">
                         {task.titolo}
