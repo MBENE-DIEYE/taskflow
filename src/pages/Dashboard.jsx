@@ -158,6 +158,7 @@ const Dashboard = ({ utente, onLogout, onSelectProject }) => {
 
             {/* ── Contenuto principale ── */}
             <main className="md:ml-52 flex-1 px-4 md:px-8 py-8 mt-12 md:mt-0 min-h-screen">
+                <div className="max-w-6xl mx-auto">
 
                 {/* Vista Progetti */}
                 {vistaAttiva === "progetti" && (
@@ -305,6 +306,7 @@ const Dashboard = ({ utente, onLogout, onSelectProject }) => {
                         </div>
                     </>
                 )}
+                </div>
             </main>
 
             {showForm && (
