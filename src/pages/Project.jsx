@@ -257,8 +257,8 @@ const Project = ({ project, utente, onBack, onLogout }) => {
     )
 
     return (
-        <div className="min-h-screen bg-gray-50">
-            <header className="bg-white shadow-sm py-3 md:py-4 px-4 md:px-6 flex items-center justify-between gap-2">
+        <>
+            <header className="bg-white shadow-sm py-3 md:py-4 px-4 md:px-6 flex items-center justify-between gap-2 mt-12 md:mt-0">
                 <div className="flex items-center gap-2 md:gap-3 min-w-0">
                     <button
                         onClick={onBack}
@@ -512,7 +512,7 @@ const Project = ({ project, utente, onBack, onLogout }) => {
                     task={editingTask}
                 />
             )}
-        </div>
+        </>
     )
 }
 
