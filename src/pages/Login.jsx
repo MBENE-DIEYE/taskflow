@@ -74,7 +74,7 @@ const Login = ({ onLogin }) => {
     if (isRecupero) {
         return (
             <div className='min-h-screen bg-gray-50 flex items-center justify-center'>
-                <div className='bg-white rounded-2xl shadow-sm border border-gray-100 p-8 w-full max-w-md'>
+                <div className='bg-white rounded-2xl shadow-sm border border-blue-200 p-8 w-full max-w-md'>
                     <h1 className='text-2xl font-bold text-gray-800 mb-2'>Recupera password</h1>
                     <p className='text-gray-500 text-sm mb-6'>
                         Inserisci la tua email e ti mandiamo un link per reimpostare la password.
@@ -122,7 +122,7 @@ const Login = ({ onLogin }) => {
 
     return (
         <div className='min-h-screen bg-gray-50 flex items-center justify-center'>
-            <div className='bg-white rounded-2xl shadow-sm border border-gray-100 p-8 w-full max-w-md'>
+            <div className='bg-white rounded-2xl shadow-sm border border-blue-200 p-8 w-full max-w-md'>
                 <h1 className='text-2xl font-bold text-gray-800 mb-2'>
                     {isRegistro ? "Crea account" : "Bentornato !"}
                 </h1>
@@ -202,7 +202,7 @@ const Login = ({ onLogin }) => {
                     <button
                         type='submit'
                         disabled={loading}
-                        className='bg-green-800 text-white px-6 py-2 rounded-xl hover:bg-green-900 transition-colors disabled:opacity-50'
+                        className='bg-blue-100 text-blue-700 px-6 py-2 rounded-xl hover:bg-blue-200 transition-colors disabled:opacity-50'
                     >
                         {loading ? "Caricamento..." : isRegistro ? "Registrati" : "Accedi"}
                     </button>
