@@ -29,8 +29,10 @@ const Project = ({ project, utente, onBack, onLogout }) => {
     const [draggingId, setDraggingId] = useState(null)
     const [dragOverColonna, setDragOverColonna] = useState(null)
     const [defaultStatoForm, setDefaultStatoForm] = useState("da_fare")
-    const [viewingTask, setViewingTask] = useState(null)
     const [showChat, setShowChat] = useState(false)
+    const [searchQuery, setSearchQuery] = useState("")
+    const [filtroPriorita, setFiltroPriorita] = useState("tutte")
+    const [colonnaAttivaMobile, setColonnaAttivaMobile] = useState("da_fare")
     const draggedRef = useRef(false)
 
     const fetchTasks = async () => {
@@ -183,11 +185,6 @@ const Project = ({ project, utente, onBack, onLogout }) => {
         setTimeout(() => { draggedRef.current = false }, 100)
     }
 
-    const aggiornaPriorita = async (taskId, nuovaPriorita) => {
-        setTasks(prev => prev.map(t => t.id === taskId ? { ...t, priorita: nuovaPriorita } : t))
-        await supabase.from("tasks").update({ priorita: nuovaPriorita }).eq("id", taskId)
-    }
-
     useEffect(() => {
         fetchTasks()
         fetchMembri()
@@ -205,42 +202,93 @@ const Project = ({ project, utente, onBack, onLogout }) => {
         return () => supabase.removeChannel(canale)
     }, [])
 
+    const getFilteredTasks = (colonnaId) => tasks.filter(t =>
+        t.stato === colonnaId &&
+        (filtroPriorita === "tutte" || t.priorita === filtroPriorita) &&
+        (!searchQuery || t.titolo.toLowerCase().includes(searchQuery.toLowerCase()))
+    )
+
+    const renderCard = (task) => (
+        <div
+            key={task.id}
+            draggable
+            onDragStart={(e) => handleDragStart(e, task.id)}
+            onDragEnd={handleDragEnd}
+            className={`group bg-white rounded-lg px-3 py-2.5 border border-gray-100 shadow-sm cursor-grab active:cursor-grabbing hover:shadow hover:border-gray-200 transition-all select-none ${draggingId === task.id ? "opacity-40" : ""}`}
+        >
+            <div className="flex items-start gap-1.5">
+                <div className="flex-1 min-w-0">
+                    <span className="text-[13px] text-gray-700 leading-snug">
+                        {task.titolo}
+                    </span>
+                    {task.scadenza && (
+                        <p className="text-[11px] text-gray-400 mt-0.5">
+                            📅 {formatData(task.scadenza)}
+                        </p>
+                    )}
+                </div>
+                <div className="flex items-center gap-1 shrink-0 mt-0.5">
+                    {task.assegnatarioNome && (
+                        <span
+                            className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold flex items-center justify-center"
+                            title={task.assegnatarioNome}
+                        >
+                            {task.assegnatarioNome.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)}
+                        </span>
+                    )}
+                    <button
+                        onClick={(e) => { e.stopPropagation(); setEditingTask(task) }}
+                        className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-blue-500 transition-opacity text-sm leading-4"
+                        title="Modifica"
+                    >
+                        ✎
+                    </button>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); handleDelete(task.id) }}
+                        disabled={deletingId === task.id}
+                        className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 transition-opacity text-base leading-4 disabled:opacity-30"
+                        title="Elimina"
+                    >
+                        ×
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
+
     return (
         <div className="min-h-screen bg-gray-50">
-            <header className="bg-white shadow-sm py-4 px-6 flex items-center justify-between">
-                <div className="flex items-center gap-3">
+            <header className="bg-white shadow-sm py-3 md:py-4 px-4 md:px-6 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 md:gap-3 min-w-0">
                     <button
                         onClick={onBack}
-                        className="bg-blue-100 text-blue-700 px-4 py-2 rounded-xl text-sm hover:bg-blue-200 transition-colors"
+                        className="bg-blue-100 text-blue-700 px-3 md:px-4 py-2 rounded-xl text-sm hover:bg-blue-200 transition-colors shrink-0"
                     >
-                        ← Indietro
+                        <span className="md:hidden">←</span>
+                        <span className="hidden md:inline">← Indietro</span>
                     </button>
-                    <h1 className="text-xl font-bold text-gray-800">{project.nome}</h1>
+                    <h1 className="text-base md:text-xl font-bold text-gray-800 truncate">{project.nome}</h1>
                 </div>
-                <div className="flex gap-2 items-center">
+                <div className="flex gap-1.5 md:gap-2 items-center shrink-0">
                     <button
                         onClick={() => setShowCollaboratori(!showCollaboratori)}
-                        className="bg-purple-100 text-purple-700 px-4 py-2 rounded-xl text-sm hover:bg-purple-200 transition-colors"
+                        className="bg-purple-100 text-purple-700 px-2.5 md:px-4 py-2 rounded-xl text-sm hover:bg-purple-200 transition-colors"
                     >
-                        👥 Collaboratori ({membri.length})
+                        <span>👥</span>
+                        <span className="hidden md:inline ml-1">Collaboratori ({membri.length})</span>
                     </button>
                     <button
                         onClick={() => { setDefaultStatoForm("da_fare"); setShowForm(true) }}
-                        className="bg-blue-100 text-blue-700 px-4 py-2 rounded-xl text-sm hover:bg-blue-200 transition-colors"
+                        className="bg-blue-100 text-blue-700 px-2.5 md:px-4 py-2 rounded-xl text-sm hover:bg-blue-200 transition-colors"
                     >
-                        + Nuovo task
-                    </button>
-                    <button
-                        onClick={onLogout}
-                        className="text-xs text-red-400 hover:text-red-600 transition-colors"
-                    >
-                        Esci
+                        <span>+</span>
+                        <span className="hidden md:inline ml-1">Nuovo task</span>
                     </button>
                 </div>
             </header>
 
             {showCollaboratori && (
-                <div className="bg-white border-b border-gray-100 px-6 py-4 max-w-4xl mx-auto mt-4 rounded-xl shadow-sm">
+                <div className="bg-white border-b border-gray-100 px-4 md:px-6 py-4 max-w-4xl mx-auto mt-4 rounded-xl shadow-sm">
                     <h2 className="font-semibold text-gray-700 mb-3">Collaboratori del progetto</h2>
                     <div className="flex gap-2 mb-3">
                         <input
@@ -291,7 +339,7 @@ const Project = ({ project, utente, onBack, onLogout }) => {
                 </div>
             )}
 
-            <main className="max-w-7xl mx-auto px-4 py-8">
+            <main className="max-w-7xl mx-auto px-4 py-6 md:py-8">
                 {project.description && (
                     <p className="text-gray-500 text-sm mb-6">{project.description}</p>
                 )}
@@ -302,180 +350,149 @@ const Project = ({ project, utente, onBack, onLogout }) => {
                     </div>
                 )}
 
-                {loading ? (
-                    <p className="text-gray-400 text-center mt-12">Caricamento...</p>
-                ) : (
-                    <div className="grid grid-cols-3 gap-4 items-start">
-                        {COLONNE.map(col => {
-                            const colTasks = tasks.filter(t => t.stato === col.id)
-                            const isDragOver = dragOverColonna === col.id
-
-                            return (
-                                <div
-                                    key={col.id}
-                                    onDragOver={(e) => handleDragOver(e, col.id)}
-                                    onDrop={(e) => handleDrop(e, col.id)}
-                                    onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverColonna(null) }}
-                                    className={`rounded-2xl p-3 transition-all ${col.bg} ${isDragOver ? "ring-2 ring-blue-400 ring-offset-1" : ""}`}
+                {/* Toolbar ricerca + filtri */}
+                {!loading && (
+                    <div className="flex flex-wrap items-center gap-2 mb-5">
+                        <div className="relative flex-1 min-w-48">
+                            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                            <input
+                                type="text"
+                                placeholder="Cerca task..."
+                                value={searchQuery}
+                                onChange={e => setSearchQuery(e.target.value)}
+                                className="w-full pl-8 pr-4 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200 bg-white"
+                            />
+                        </div>
+                        <div className="flex gap-1">
+                            {["tutte", "alta", "media", "bassa"].map(p => (
+                                <button
+                                    key={p}
+                                    onClick={() => setFiltroPriorita(p)}
+                                    className={`text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${filtroPriorita === p
+                                        ? "bg-blue-50 text-blue-600 font-medium border border-blue-100"
+                                        : "bg-white text-gray-400 border border-gray-200 hover:border-gray-300 hover:text-gray-500"}`}
                                 >
-                                    {/* Intestazione colonna */}
-                                    <div className="flex items-center justify-between mb-3 px-1">
-                                        <div className="flex items-center gap-2">
-                                            <div className={`w-2.5 h-2.5 rounded-full ${col.dot}`} />
-                                            <span className={`text-sm font-semibold ${col.header}`}>{col.label}</span>
-                                            <span className="text-xs bg-white border border-gray-200 text-gray-400 px-1.5 py-0.5 rounded-full font-medium">
-                                                {colTasks.length}
-                                            </span>
-                                        </div>
-                                        {col.id === "da_fare" && (
-                                            <button
-                                                onClick={() => { setDefaultStatoForm("da_fare"); setShowForm(true) }}
-                                                className="w-6 h-6 flex items-center justify-center rounded-md text-gray-400 hover:text-gray-700 hover:bg-white transition-colors text-lg leading-none"
-                                                title="Aggiungi task"
-                                            >
-                                                +
-                                            </button>
-                                        )}
-                                    </div>
-
-                                    {/* Card */}
-                                    <div className="flex flex-col gap-2 min-h-12">
-                                        {colTasks.map(task => (
-                                            <div
-                                                key={task.id}
-                                                draggable
-                                                onDragStart={(e) => handleDragStart(e, task.id)}
-                                                onDragEnd={handleDragEnd}
-                                                onClick={() => { if (!draggedRef.current) setViewingTask(task) }}
-                                                className={`group bg-white rounded-lg px-3 py-2.5 border border-gray-100 shadow-sm cursor-pointer hover:shadow hover:border-gray-200 transition-all select-none ${draggingId === task.id ? "opacity-40" : ""}`}
-                                            >
-                                                <div className="flex items-start gap-1.5">
-                                                    <span className="text-[13px] text-gray-700 leading-snug flex-1">
-                                                        {task.titolo}
-                                                    </span>
-                                                    <div className="flex items-center gap-1 shrink-0 mt-0.5">
-                                                        {task.assegnatarioNome && (
-                                                            <span
-                                                                className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold flex items-center justify-center"
-                                                                title={task.assegnatarioNome}
-                                                            >
-                                                                {task.assegnatarioNome.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)}
-                                                            </span>
-                                                        )}
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); handleDelete(task.id) }}
-                                                            disabled={deletingId === task.id}
-                                                            className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 transition-opacity text-base leading-4 disabled:opacity-30"
-                                                            title="Elimina"
-                                                        >
-                                                            ×
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-
-                                        {colTasks.length === 0 && (
-                                            <div className={`rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center h-20 transition-colors ${isDragOver ? "border-blue-300 bg-blue-50/50" : ""}`}>
-                                                <span className="text-xs text-gray-300">
-                                                    {isDragOver ? "Rilascia qui" : "Nessun task"}
-                                                </span>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            )
-                        })}
+                                    {p !== "tutte" && (
+                                        <span className={`w-1.5 h-1.5 rounded-full ${p === "alta" ? "bg-rose-300" : p === "media" ? "bg-amber-300" : "bg-emerald-300"}`} />
+                                    )}
+                                    {p === "tutte" ? "Tutte" : p === "alta" ? "Alta" : p === "media" ? "Media" : "Bassa"}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 )}
 
+                {loading ? (
+                    <p className="text-gray-400 text-center mt-12">Caricamento...</p>
+                ) : (
+                    <>
+                        {/* ── Mobile: tab switcher ── */}
+                        <div className="md:hidden flex mb-4 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden max-w-sm mx-auto">
+                            {COLONNE.map(col => {
+                                const count = getFilteredTasks(col.id).length
+                                const isActive = colonnaAttivaMobile === col.id
+                                return (
+                                    <button
+                                        key={col.id}
+                                        onClick={() => setColonnaAttivaMobile(col.id)}
+                                        className={`flex-1 py-2.5 text-xs font-medium flex items-center justify-center gap-1.5 border-b-2 transition-colors ${
+                                            isActive ? `${col.header} border-current` : "text-gray-400 border-transparent"
+                                        }`}
+                                    >
+                                        <div className={`w-1.5 h-1.5 rounded-full ${col.dot}`} />
+                                        {col.label}
+                                        {count > 0 && (
+                                            <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full font-semibold">
+                                                {count}
+                                            </span>
+                                        )}
+                                    </button>
+                                )
+                            })}
+                        </div>
+
+                        {/* ── Mobile: colonna attiva ── */}
+                        <div className="md:hidden max-w-sm mx-auto">
+                            {COLONNE.filter(col => col.id === colonnaAttivaMobile).map(col => {
+                                const colTasks = getFilteredTasks(col.id)
+                                return (
+                                    <div key={col.id} className={`rounded-2xl p-3 ${col.bg}`}>
+                                        <div className="flex flex-col gap-2 min-h-16">
+                                            {colTasks.map(task => renderCard(task))}
+                                            {colTasks.length === 0 && (
+                                                <div className="rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center h-24">
+                                                    <span className="text-xs text-gray-300">Nessun task</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+
+                        {/* ── Desktop: griglia 3 colonne ── */}
+                        <div className="hidden md:block overflow-x-auto -mx-4 px-4 pb-4">
+                            <div className="grid grid-cols-3 gap-4 items-start min-w-160">
+                                {COLONNE.map(col => {
+                                    const colTasks = getFilteredTasks(col.id)
+                                    const isDragOver = dragOverColonna === col.id
+
+                                    return (
+                                        <div
+                                            key={col.id}
+                                            onDragOver={(e) => handleDragOver(e, col.id)}
+                                            onDrop={(e) => handleDrop(e, col.id)}
+                                            onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverColonna(null) }}
+                                            className={`rounded-2xl p-3 transition-all ${col.bg} ${isDragOver ? "ring-2 ring-blue-400 ring-offset-1" : ""}`}
+                                        >
+                                            <div className="flex items-center justify-between mb-3 px-1">
+                                                <div className="flex items-center gap-2">
+                                                    <div className={`w-2.5 h-2.5 rounded-full ${col.dot}`} />
+                                                    <span className={`text-sm font-semibold ${col.header}`}>{col.label}</span>
+                                                    <span className="text-xs bg-white border border-gray-200 text-gray-400 px-1.5 py-0.5 rounded-full font-medium">
+                                                        {colTasks.length}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex flex-col gap-2 min-h-12">
+                                                {colTasks.map(task => renderCard(task))}
+
+                                                {colTasks.length === 0 && (
+                                                    <div className={`rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center h-20 transition-colors ${isDragOver ? "border-blue-300 bg-blue-50/50" : ""}`}>
+                                                        <span className="text-xs text-gray-300">
+                                                            {isDragOver ? "Rilascia qui" : "Nessun task"}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    </>
+                )}
             </main>
 
             {/* Bottone chat flottante */}
             <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-3">
                 {showChat && (
-                    <div className="w-80 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+                    <div className="w-64 md:w-80 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
                         <Chat project={project} utente={utente} />
                     </div>
                 )}
                 <button
                     onClick={() => setShowChat(!showChat)}
-                    className="w-12 h-12 bg-blue-400 text-white rounded-full shadow-md hover:bg-blue-500 transition-colors flex items-center justify-center text-xl"
+                    className="w-12 h-12 bg-blue-400 text-white rounded-full shadow-md hover:bg-blue-500 transition-colors flex items-center justify-center"
                     title="Chat del progetto"
                 >
-                    {showChat ? "×" : "💬"}
+                    {showChat
+                        ? <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                        : <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    }
                 </button>
             </div>
-
-            {viewingTask && (
-                <div
-                    className="fixed inset-0 bg-black/30 flex items-center justify-center z-50"
-                    onClick={() => setViewingTask(null)}
-                >
-                    <div
-                        className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div className="flex items-start justify-between mb-4">
-                            <h2 className="text-base font-semibold text-gray-800 leading-snug flex-1 pr-3">
-                                {viewingTask.titolo}
-                            </h2>
-                            <button
-                                onClick={() => setViewingTask(null)}
-                                className="text-gray-300 hover:text-gray-500 text-xl leading-none"
-                            >
-                                ×
-                            </button>
-                        </div>
-
-                        {viewingTask.description && (
-                            <p className="text-sm text-gray-500 mb-4 leading-relaxed">{viewingTask.description}</p>
-                        )}
-
-                        <div className="flex flex-col gap-3 mb-6">
-                            <div className="flex items-center gap-3">
-                                <span className="text-xs text-gray-400 w-24 shrink-0">Priorità</span>
-                                <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-                                    viewingTask.priorita === "alta" ? "bg-red-50 text-red-500" :
-                                    viewingTask.priorita === "media" ? "bg-amber-50 text-amber-600" :
-                                    "bg-emerald-50 text-emerald-600"
-                                }`}>
-                                    {viewingTask.priorita === "alta" ? "🔴 Alta" :
-                                     viewingTask.priorita === "media" ? "🟡 Media" : "🟢 Bassa"}
-                                </span>
-                            </div>
-
-                            {viewingTask.scadenza && (
-                                <div className="flex items-center gap-3">
-                                    <span className="text-xs text-gray-400 w-24 shrink-0">Scadenza</span>
-                                    <span className="text-sm text-gray-600">📅 {formatData(viewingTask.scadenza)}</span>
-                                </div>
-                            )}
-
-                            {viewingTask.assegnatarioNome && (
-                                <div className="flex items-center gap-3">
-                                    <span className="text-xs text-gray-400 w-24 shrink-0">Assegnato a</span>
-                                    <span className="text-sm text-gray-600">👤 {viewingTask.assegnatarioNome}</span>
-                                </div>
-                            )}
-
-                            {viewingTask.creatoreNome && (
-                                <div className="flex items-center gap-3">
-                                    <span className="text-xs text-gray-400 w-24 shrink-0">Creato da</span>
-                                    <span className="text-sm text-gray-600">✏️ {viewingTask.creatoreNome}</span>
-                                </div>
-                            )}
-                        </div>
-
-                        <button
-                            onClick={() => { setEditingTask(viewingTask); setViewingTask(null) }}
-                            className="w-full bg-blue-100 text-blue-700 py-2 rounded-xl text-sm font-medium hover:bg-blue-200 transition-colors"
-                        >
-                            Modifica
-                        </button>
-                    </div>
-                </div>
-            )}
 
             {showForm && (
                 <TaskForm

@@ -92,7 +92,7 @@ const Chat = ({ project, utente }) => {
     }
 
     return (
-        <div className="flex flex-col h-96 bg-slate-50 rounded-xl border border-gray-100 shadow-sm">
+        <div className="flex flex-col h-96 bg-blue-50/30 rounded-xl border border-gray-100 shadow-sm">
             <div className="px-4 py-3 border-b border-gray-200 bg-white">
                 <h3 className="font-semibold text-gray-700 text-sm">
                     💬 Chat del progetto

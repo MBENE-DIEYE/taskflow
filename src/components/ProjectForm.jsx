@@ -35,8 +35,8 @@ const ProjectForm = ({ utente, onProjectAdded, onClose, project }) => {
     }
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-xl">
+        <div className="fixed inset-0 bg-gray-50/80 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-xl border border-blue-100">
                 <h2 className="text-xl font-semibold text-gray-800 mb-6">
                     {editMode ? "Modifica progetto" : "Nuovo progetto"}
                 </h2>

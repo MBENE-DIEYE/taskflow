@@ -54,46 +54,13 @@ const TaskForm = ({ project, utente, onTaskAdded, onClose, task, defaultStato = 
                 .update(payload)
                 .eq("id", task.id)
 
-            if (error) {
-                setErrore(error.message)
-                setLoading(false)
-                return
-            }
+            if (error) { setErrore(error.message); setLoading(false); return }
         } else {
             const { error } = await supabase
                 .from("tasks")
-                .insert({
-                    ...payload,
-                    project_id: project.id,
-                    user_id: utente.id,
-                    stato: defaultStato
-                })
+                .insert({ ...payload, project_id: project.id, user_id: utente.id, stato: defaultStato })
 
-            if (error) {
-                setErrore(error.message)
-                setLoading(false)
-                return
-            }
-
-            // Email di notifica solo alla creazione con assegnatario
-            if (assegnatoA) {
-                const { data: assegnatarioData } = await supabase
-                    .from("users")
-                    .select("nome, cognome, email")
-                    .eq("id", assegnatoA)
-                    .single()
-
-                if (assegnatarioData) {
-                    await supabase.functions.invoke("invia-email", {
-                        body: {
-                            titolo,
-                            assegnatarioEmail: assegnatarioData.email,
-                            assegnatarioNome: assegnatarioData.nome,
-                            progetto: project.nome
-                        }
-                    })
-                }
-            }
+            if (error) { setErrore(error.message); setLoading(false); return }
         }
 
         onTaskAdded()
@@ -101,15 +68,11 @@ const TaskForm = ({ project, utente, onTaskAdded, onClose, task, defaultStato = 
         setLoading(false)
     }
 
-    const prioritaColore = {
-        alta: "text-red-500",
-        media: "text-yellow-500",
-        bassa: "text-green-500"
-    }
+    const prioritaColore = { alta: "text-red-500", media: "text-yellow-500", bassa: "text-green-500" }
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-xl">
+        <div className="fixed inset-0 bg-gray-50/80 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-xl border border-blue-100">
                 <h2 className="text-xl font-semibold text-gray-800 mb-6">
                     {editMode ? "Modifica task" : "Nuovo task"}
                 </h2>
@@ -168,9 +131,7 @@ const TaskForm = ({ project, utente, onTaskAdded, onClose, task, defaultStato = 
                             className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-300"
                         >
                             <option value="">— Nessuno —</option>
-                            <option value={utente.id}>
-                                {utente.nome} {utente.cognome} (tu)
-                            </option>
+                            <option value={utente.id}>{utente.nome} {utente.cognome} (tu)</option>
                             {collaboratori.map(membro => (
                                 <option key={membro.id} value={membro.user_id}>
                                     {membro.users?.nome} {membro.users?.cognome}
@@ -190,7 +151,7 @@ const TaskForm = ({ project, utente, onTaskAdded, onClose, task, defaultStato = 
                         <button
                             type="submit"
                             disabled={loading}
-                            className="flex-1 bg-blue-500 text-white px-4 py-2 rounded-xl hover:bg-blue-600 transition-colors disabled:opacity-50"
+                            className="flex-1 bg-blue-100 text-blue-700 px-4 py-2 rounded-xl hover:bg-blue-200 transition-colors disabled:opacity-50"
                         >
                             {loading ? "Salvataggio..." : editMode ? "Salva modifiche" : "Crea task"}
                         </button>
