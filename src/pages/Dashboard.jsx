@@ -180,7 +180,7 @@ const Dashboard = ({ utente, onLogout, onSelectProject }) => {
                         {loading ? (
                             <p className="text-gray-400 text-center mt-16">Caricamento...</p>
                         ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-3xl">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl">
                                 {projects.filter(p => p.nome.toLowerCase().includes(searchProgetti.toLowerCase())).map((project, i) => {
                                     const totale = project.tasks?.length ?? 0
                                     const completati = project.tasks?.filter(t => t.stato === "completato").length ?? 0

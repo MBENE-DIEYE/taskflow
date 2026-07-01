@@ -387,7 +387,7 @@ const Project = ({ project, utente, onBack, onLogout }) => {
                 ) : (
                     <>
                         {/* ── Mobile: tab switcher ── */}
-                        <div className="md:hidden flex mb-4 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden max-w-sm mx-auto">
+                        <div className="md:hidden flex mb-4 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mx-auto">
                             {COLONNE.map(col => {
                                 const count = getFilteredTasks(col.id).length
                                 const isActive = colonnaAttivaMobile === col.id
@@ -412,7 +412,7 @@ const Project = ({ project, utente, onBack, onLogout }) => {
                         </div>
 
                         {/* ── Mobile: colonna attiva ── */}
-                        <div className="md:hidden max-w-sm mx-auto">
+                        <div className="md:hidden">
                             {COLONNE.filter(col => col.id === colonnaAttivaMobile).map(col => {
                                 const colTasks = getFilteredTasks(col.id)
                                 return (
