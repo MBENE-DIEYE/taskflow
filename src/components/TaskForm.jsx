@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react"
 import { supabase } from "../supabase"
 
-const TaskForm = ({ project, utente, onTaskAdded, onClose, task }) => {
+const TaskForm = ({ project, utente, onTaskAdded, onClose, task, defaultStato = "da_fare" }) => {
     const editMode = !!task
 
     const [titolo, setTitolo] = useState(task?.titolo ?? "")
@@ -66,7 +66,7 @@ const TaskForm = ({ project, utente, onTaskAdded, onClose, task }) => {
                     ...payload,
                     project_id: project.id,
                     user_id: utente.id,
-                    stato: "da_fare"
+                    stato: defaultStato
                 })
 
             if (error) {

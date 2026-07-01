@@ -1,10 +1,16 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { supabase } from "../supabase"
 import TaskForm from "../components/TaskForm"
 import Chat from "../components/Chat"
 
 const formatData = (data) =>
     data ? new Date(data + "T00:00:00").toLocaleDateString("it-IT") : null
+
+const COLONNE = [
+    { id: "da_fare", label: "Da fare", dot: "bg-purple-300", bg: "bg-purple-50", header: "text-purple-600" },
+    { id: "in_corso", label: "In corso", dot: "bg-amber-300", bg: "bg-amber-50", header: "text-amber-600" },
+    { id: "completato", label: "Completato", dot: "bg-emerald-300", bg: "bg-emerald-50", header: "text-emerald-600" },
+]
 
 const Project = ({ project, utente, onBack, onLogout }) => {
     const [tasks, setTasks] = useState([])
@@ -14,14 +20,18 @@ const Project = ({ project, utente, onBack, onLogout }) => {
     const [errore, setErrore] = useState("")
     const [deletingId, setDeletingId] = useState(null)
 
-    const [filtroStato, setFiltroStato] = useState("tutti")
-    const [filtroPriorita, setFiltroPriorita] = useState("tutte")
-
     const [membri, setMembri] = useState([])
     const [emailInvito, setEmailInvito] = useState("")
     const [messaggioInvito, setMessaggioInvito] = useState("")
     const [loadingInvito, setLoadingInvito] = useState(false)
     const [showCollaboratori, setShowCollaboratori] = useState(false)
+
+    const [draggingId, setDraggingId] = useState(null)
+    const [dragOverColonna, setDragOverColonna] = useState(null)
+    const [defaultStatoForm, setDefaultStatoForm] = useState("da_fare")
+    const [viewingTask, setViewingTask] = useState(null)
+    const [showChat, setShowChat] = useState(false)
+    const draggedRef = useRef(false)
 
     const fetchTasks = async () => {
         const { data, error } = await supabase
@@ -136,11 +146,46 @@ const Project = ({ project, utente, onBack, onLogout }) => {
         if (!window.confirm("Sei sicuro di voler eliminare questo task?")) return
         setDeletingId(id)
         const { error } = await supabase.from("tasks").delete().eq("id", id)
-        if (error) {
-            alert("Errore durante l'eliminazione del task")
-        }
+        if (error) alert("Errore durante l'eliminazione del task")
         setDeletingId(null)
         fetchTasks()
+    }
+
+    const handleDragStart = (e, taskId) => {
+        draggedRef.current = true
+        setDraggingId(taskId)
+        e.dataTransfer.setData("text/plain", taskId)
+        e.dataTransfer.effectAllowed = "move"
+    }
+
+    const handleDragOver = (e, colonnaId) => {
+        e.preventDefault()
+        e.dataTransfer.dropEffect = "move"
+        setDragOverColonna(colonnaId)
+    }
+
+    const handleDrop = async (e, colonnaId) => {
+        e.preventDefault()
+        setDragOverColonna(null)
+        const taskId = e.dataTransfer.getData("text/plain")
+        if (!taskId) { setDraggingId(null); return }
+        const task = tasks.find(t => t.id === taskId)
+        if (!task || task.stato === colonnaId) { setDraggingId(null); return }
+        setTasks(prev => prev.map(t => t.id === taskId ? { ...t, stato: colonnaId } : t))
+        const { error } = await supabase.from("tasks").update({ stato: colonnaId }).eq("id", taskId)
+        if (error) fetchTasks()
+        setDraggingId(null)
+    }
+
+    const handleDragEnd = () => {
+        setDraggingId(null)
+        setDragOverColonna(null)
+        setTimeout(() => { draggedRef.current = false }, 100)
+    }
+
+    const aggiornaPriorita = async (taskId, nuovaPriorita) => {
+        setTasks(prev => prev.map(t => t.id === taskId ? { ...t, priorita: nuovaPriorita } : t))
+        await supabase.from("tasks").update({ priorita: nuovaPriorita }).eq("id", taskId)
     }
 
     useEffect(() => {
@@ -160,25 +205,13 @@ const Project = ({ project, utente, onBack, onLogout }) => {
         return () => supabase.removeChannel(canale)
     }, [])
 
-    const statoColore = (stato) => {
-        if (stato === "completato") return "bg-green-100 text-green-600"
-        if (stato === "in_corso") return "bg-yellow-100 text-yellow-600"
-        return "bg-gray-100 text-gray-600"
-    }
-
-    const taskFiltrati = tasks.filter(t => {
-        if (filtroStato !== "tutti" && t.stato !== filtroStato) return false
-        if (filtroPriorita !== "tutte" && t.priorita !== filtroPriorita) return false
-        return true
-    })
-
     return (
         <div className="min-h-screen bg-gray-50">
             <header className="bg-white shadow-sm py-4 px-6 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     <button
                         onClick={onBack}
-                        className="bg-blue-500 text-white px-4 py-2 rounded-xl text-sm hover:bg-blue-600 transition-colors"
+                        className="bg-blue-100 text-blue-700 px-4 py-2 rounded-xl text-sm hover:bg-blue-200 transition-colors"
                     >
                         ← Indietro
                     </button>
@@ -187,13 +220,13 @@ const Project = ({ project, utente, onBack, onLogout }) => {
                 <div className="flex gap-2 items-center">
                     <button
                         onClick={() => setShowCollaboratori(!showCollaboratori)}
-                        className="bg-purple-500 text-white px-4 py-2 rounded-xl text-sm hover:bg-purple-600 transition-colors"
+                        className="bg-purple-100 text-purple-700 px-4 py-2 rounded-xl text-sm hover:bg-purple-200 transition-colors"
                     >
                         👥 Collaboratori ({membri.length})
                     </button>
                     <button
-                        onClick={() => setShowForm(true)}
-                        className="bg-blue-500 text-white px-4 py-2 rounded-xl text-sm hover:bg-blue-600 transition-colors"
+                        onClick={() => { setDefaultStatoForm("da_fare"); setShowForm(true) }}
+                        className="bg-blue-100 text-blue-700 px-4 py-2 rounded-xl text-sm hover:bg-blue-200 transition-colors"
                     >
                         + Nuovo task
                     </button>
@@ -258,7 +291,7 @@ const Project = ({ project, utente, onBack, onLogout }) => {
                 </div>
             )}
 
-            <main className="max-w-4xl mx-auto px-4 py-8">
+            <main className="max-w-7xl mx-auto px-4 py-8">
                 {project.description && (
                     <p className="text-gray-500 text-sm mb-6">{project.description}</p>
                 )}
@@ -266,124 +299,183 @@ const Project = ({ project, utente, onBack, onLogout }) => {
                 {errore && (
                     <div className="bg-red-50 text-red-500 text-sm px-4 py-3 rounded-xl mb-6">
                         {errore}
-                        <button onClick={fetchTasks} className="ml-2 underline">Riprova</button>
-                    </div>
-                )}
-
-                {/* Filtri */}
-                {!loading && tasks.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mb-6">
-                        <div className="flex gap-1">
-                            {["tutti", "da_fare", "in_corso", "completato"].map(s => (
-                                <button
-                                    key={s}
-                                    onClick={() => setFiltroStato(s)}
-                                    className={`text-xs px-3 py-1.5 rounded-full transition-colors ${
-                                        filtroStato === s
-                                            ? "bg-blue-500 text-white"
-                                            : "bg-white text-gray-500 border border-gray-200 hover:border-blue-300"
-                                    }`}
-                                >
-                                    {s === "tutti" ? "Tutti" : s === "da_fare" ? "Da fare" : s === "in_corso" ? "In corso" : "Completati"}
-                                </button>
-                            ))}
-                        </div>
-                        <div className="flex gap-1">
-                            {["tutte", "alta", "media", "bassa"].map(p => (
-                                <button
-                                    key={p}
-                                    onClick={() => setFiltroPriorita(p)}
-                                    className={`text-xs px-3 py-1.5 rounded-full transition-colors ${
-                                        filtroPriorita === p
-                                            ? "bg-gray-700 text-white"
-                                            : "bg-white text-gray-500 border border-gray-200 hover:border-gray-400"
-                                    }`}
-                                >
-                                    {p === "tutte" ? "Tutte le priorità" : p === "alta" ? "🔴 Alta" : p === "media" ? "🟡 Media" : "🟢 Bassa"}
-                                </button>
-                            ))}
-                        </div>
-                        {(filtroStato !== "tutti" || filtroPriorita !== "tutte") && (
-                            <button
-                                onClick={() => { setFiltroStato("tutti"); setFiltroPriorita("tutte") }}
-                                className="text-xs px-3 py-1.5 text-gray-400 hover:text-gray-600 underline"
-                            >
-                                Rimuovi filtri
-                            </button>
-                        )}
                     </div>
                 )}
 
                 {loading ? (
                     <p className="text-gray-400 text-center mt-12">Caricamento...</p>
-                ) : taskFiltrati.length === 0 ? (
-                    <p className="text-gray-400 text-center mt-12">
-                        {tasks.length === 0 ? "Nessun task ancora — creane uno !" : "Nessun task corrisponde ai filtri selezionati."}
-                    </p>
                 ) : (
-                    <div className="flex flex-col gap-4">
-                        {taskFiltrati.map(task => (
-                            <div key={task.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                                <div className="flex items-center justify-between mb-2">
-                                    <h3 className="font-semibold text-gray-800">{task.titolo}</h3>
-                                    <select
-                                        value={task.stato}
-                                        onChange={async (e) => {
-                                            const { error } = await supabase
-                                                .from("tasks")
-                                                .update({ stato: e.target.value })
-                                                .eq("id", task.id)
-                                            if (!error) fetchTasks()
-                                        }}
-                                        className={`text-xs px-3 py-1 rounded-full font-medium border-0 cursor-pointer ${statoColore(task.stato)}`}
-                                    >
-                                        <option value="da_fare">da fare</option>
-                                        <option value="in_corso">in corso</option>
-                                        <option value="completato">completato</option>
-                                    </select>
-                                </div>
-                                {task.description && (
-                                    <p className="text-sm text-gray-500 mb-2">{task.description}</p>
-                                )}
-                                <div className="flex items-center justify-between mt-3">
-                                    <div className="flex items-center gap-4 text-xs text-gray-400">
-                                        {task.scadenza && <span>📅 {formatData(task.scadenza)}</span>}
-                                        {task.priorita && (
-                                            <span className={`font-medium ${
-                                                task.priorita === "alta" ? "text-red-500" :
-                                                task.priorita === "media" ? "text-yellow-500" : "text-green-500"
-                                            }`}>
-                                                {task.priorita === "alta" ? "🔴" : task.priorita === "media" ? "🟡" : "🟢"} {task.priorita}
+                    <div className="grid grid-cols-3 gap-4 items-start">
+                        {COLONNE.map(col => {
+                            const colTasks = tasks.filter(t => t.stato === col.id)
+                            const isDragOver = dragOverColonna === col.id
+
+                            return (
+                                <div
+                                    key={col.id}
+                                    onDragOver={(e) => handleDragOver(e, col.id)}
+                                    onDrop={(e) => handleDrop(e, col.id)}
+                                    onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverColonna(null) }}
+                                    className={`rounded-2xl p-3 transition-all ${col.bg} ${isDragOver ? "ring-2 ring-blue-400 ring-offset-1" : ""}`}
+                                >
+                                    {/* Intestazione colonna */}
+                                    <div className="flex items-center justify-between mb-3 px-1">
+                                        <div className="flex items-center gap-2">
+                                            <div className={`w-2.5 h-2.5 rounded-full ${col.dot}`} />
+                                            <span className={`text-sm font-semibold ${col.header}`}>{col.label}</span>
+                                            <span className="text-xs bg-white border border-gray-200 text-gray-400 px-1.5 py-0.5 rounded-full font-medium">
+                                                {colTasks.length}
                                             </span>
+                                        </div>
+                                        {col.id === "da_fare" && (
+                                            <button
+                                                onClick={() => { setDefaultStatoForm("da_fare"); setShowForm(true) }}
+                                                className="w-6 h-6 flex items-center justify-center rounded-md text-gray-400 hover:text-gray-700 hover:bg-white transition-colors text-lg leading-none"
+                                                title="Aggiungi task"
+                                            >
+                                                +
+                                            </button>
                                         )}
-                                        {task.assegnatarioNome && <span>👤 a {task.assegnatarioNome}</span>}
-                                        {task.creatoreNome && <span>✏️ da {task.creatoreNome}</span>}
                                     </div>
-                                    <div className="flex items-center gap-3">
-                                        <button
-                                            onClick={() => setEditingTask(task)}
-                                            className="text-xs text-blue-400 hover:text-blue-600 transition-colors"
-                                        >
-                                            Modifica
-                                        </button>
-                                        <button
-                                            onClick={() => handleDelete(task.id)}
-                                            disabled={deletingId === task.id}
-                                            className="text-xs text-red-400 hover:text-red-600 transition-colors disabled:opacity-50"
-                                        >
-                                            {deletingId === task.id ? "..." : "Elimina"}
-                                        </button>
+
+                                    {/* Card */}
+                                    <div className="flex flex-col gap-2 min-h-12">
+                                        {colTasks.map(task => (
+                                            <div
+                                                key={task.id}
+                                                draggable
+                                                onDragStart={(e) => handleDragStart(e, task.id)}
+                                                onDragEnd={handleDragEnd}
+                                                onClick={() => { if (!draggedRef.current) setViewingTask(task) }}
+                                                className={`group bg-white rounded-lg px-3 py-2.5 border border-gray-100 shadow-sm cursor-pointer hover:shadow hover:border-gray-200 transition-all select-none ${draggingId === task.id ? "opacity-40" : ""}`}
+                                            >
+                                                <div className="flex items-start gap-1.5">
+                                                    <span className="text-[13px] text-gray-700 leading-snug flex-1">
+                                                        {task.titolo}
+                                                    </span>
+                                                    <div className="flex items-center gap-1 shrink-0 mt-0.5">
+                                                        {task.assegnatarioNome && (
+                                                            <span
+                                                                className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold flex items-center justify-center"
+                                                                title={task.assegnatarioNome}
+                                                            >
+                                                                {task.assegnatarioNome.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)}
+                                                            </span>
+                                                        )}
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleDelete(task.id) }}
+                                                            disabled={deletingId === task.id}
+                                                            className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 transition-opacity text-base leading-4 disabled:opacity-30"
+                                                            title="Elimina"
+                                                        >
+                                                            ×
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+
+                                        {colTasks.length === 0 && (
+                                            <div className={`rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center h-20 transition-colors ${isDragOver ? "border-blue-300 bg-blue-50/50" : ""}`}>
+                                                <span className="text-xs text-gray-300">
+                                                    {isDragOver ? "Rilascia qui" : "Nessun task"}
+                                                </span>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
-                            </div>
-                        ))}
+                            )
+                        })}
                     </div>
                 )}
 
-                <div className="mt-8">
-                    <Chat project={project} utente={utente} />
-                </div>
             </main>
+
+            {/* Bottone chat flottante */}
+            <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-3">
+                {showChat && (
+                    <div className="w-80 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+                        <Chat project={project} utente={utente} />
+                    </div>
+                )}
+                <button
+                    onClick={() => setShowChat(!showChat)}
+                    className="w-12 h-12 bg-blue-400 text-white rounded-full shadow-md hover:bg-blue-500 transition-colors flex items-center justify-center text-xl"
+                    title="Chat del progetto"
+                >
+                    {showChat ? "×" : "💬"}
+                </button>
+            </div>
+
+            {viewingTask && (
+                <div
+                    className="fixed inset-0 bg-black/30 flex items-center justify-center z-50"
+                    onClick={() => setViewingTask(null)}
+                >
+                    <div
+                        className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-start justify-between mb-4">
+                            <h2 className="text-base font-semibold text-gray-800 leading-snug flex-1 pr-3">
+                                {viewingTask.titolo}
+                            </h2>
+                            <button
+                                onClick={() => setViewingTask(null)}
+                                className="text-gray-300 hover:text-gray-500 text-xl leading-none"
+                            >
+                                ×
+                            </button>
+                        </div>
+
+                        {viewingTask.description && (
+                            <p className="text-sm text-gray-500 mb-4 leading-relaxed">{viewingTask.description}</p>
+                        )}
+
+                        <div className="flex flex-col gap-3 mb-6">
+                            <div className="flex items-center gap-3">
+                                <span className="text-xs text-gray-400 w-24 shrink-0">Priorità</span>
+                                <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
+                                    viewingTask.priorita === "alta" ? "bg-red-50 text-red-500" :
+                                    viewingTask.priorita === "media" ? "bg-amber-50 text-amber-600" :
+                                    "bg-emerald-50 text-emerald-600"
+                                }`}>
+                                    {viewingTask.priorita === "alta" ? "🔴 Alta" :
+                                     viewingTask.priorita === "media" ? "🟡 Media" : "🟢 Bassa"}
+                                </span>
+                            </div>
+
+                            {viewingTask.scadenza && (
+                                <div className="flex items-center gap-3">
+                                    <span className="text-xs text-gray-400 w-24 shrink-0">Scadenza</span>
+                                    <span className="text-sm text-gray-600">📅 {formatData(viewingTask.scadenza)}</span>
+                                </div>
+                            )}
+
+                            {viewingTask.assegnatarioNome && (
+                                <div className="flex items-center gap-3">
+                                    <span className="text-xs text-gray-400 w-24 shrink-0">Assegnato a</span>
+                                    <span className="text-sm text-gray-600">👤 {viewingTask.assegnatarioNome}</span>
+                                </div>
+                            )}
+
+                            {viewingTask.creatoreNome && (
+                                <div className="flex items-center gap-3">
+                                    <span className="text-xs text-gray-400 w-24 shrink-0">Creato da</span>
+                                    <span className="text-sm text-gray-600">✏️ {viewingTask.creatoreNome}</span>
+                                </div>
+                            )}
+                        </div>
+
+                        <button
+                            onClick={() => { setEditingTask(viewingTask); setViewingTask(null) }}
+                            className="w-full bg-blue-100 text-blue-700 py-2 rounded-xl text-sm font-medium hover:bg-blue-200 transition-colors"
+                        >
+                            Modifica
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {showForm && (
                 <TaskForm
@@ -391,6 +483,7 @@ const Project = ({ project, utente, onBack, onLogout }) => {
                     utente={utente}
                     onTaskAdded={fetchTasks}
                     onClose={() => setShowForm(false)}
+                    defaultStato={defaultStatoForm}
                 />
             )}
             {editingTask && (

@@ -45,7 +45,7 @@ const Chat = ({ project, utente }) => {
         })
 
         if (error) {
-            setErroreChat("Errore nell'invio del messaggio. Riprova.")
+            setErroreChat("Errore nell'invio del messaggio.")
             setLoadingInvio(false)
             return
         }
@@ -92,8 +92,8 @@ const Chat = ({ project, utente }) => {
     }
 
     return (
-        <div className="flex flex-col h-96 bg-white rounded-xl border border-gray-100 shadow-sm">
-            <div className="px-4 py-3 border-b border-gray-100">
+        <div className="flex flex-col h-96 bg-slate-50 rounded-xl border border-gray-100 shadow-sm">
+            <div className="px-4 py-3 border-b border-gray-200 bg-white">
                 <h3 className="font-semibold text-gray-700 text-sm">
                     💬 Chat del progetto
                 </h3>
@@ -141,7 +141,7 @@ const Chat = ({ project, utente }) => {
             {erroreChat && (
                 <p className="px-4 pb-1 text-xs text-red-500">{erroreChat}</p>
             )}
-            <div className="px-4 py-3 border-t border-gray-100 flex gap-2">
+            <div className="px-4 py-3 border-t border-gray-200 flex gap-2 bg-white">
                 <input
                     type="text"
                     placeholder="Scrivi un messaggio... (Invio per inviare)"

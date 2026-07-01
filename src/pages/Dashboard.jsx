@@ -2,11 +2,24 @@ import { useState, useEffect } from "react"
 import { supabase } from "../supabase"
 import ProjectForm from "../components/ProjectForm"
 
+const BAND_COLORS = [
+    "bg-purple-100",
+    "bg-blue-100",
+    "bg-emerald-100",
+]
+
+const NAV = [
+    { id: "progetti", label: "Progetti", icon: "📋" },
+    { id: "task",     label: "Task miei", icon: "✅" },
+    { id: "impostazioni", label: "Impostazioni", icon: "⚙️" },
+]
+
 const Dashboard = ({ utente, onLogout, onSelectProject }) => {
+    const [vistaAttiva, setVistaAttiva] = useState("progetti")
     const [projects, setProjects] = useState([])
     const [taskAssegnati, setTaskAssegnati] = useState([])
-    const [showTaskAssegnati, setShowTaskAssegnati] = useState(false)
     const [showForm, setShowForm] = useState(false)
+    const [editingProject, setEditingProject] = useState(null)
     const [loading, setLoading] = useState(true)
 
     const fetchTaskAssegnati = async () => {
@@ -20,7 +33,6 @@ const Dashboard = ({ utente, onLogout, onSelectProject }) => {
     }
 
     const fetchProjects = async () => {
-        // Progetti di cui sei proprietario (sempre visibili)
         const { data: owned } = await supabase
             .from("projects")
             .select("*, tasks(stato)")
@@ -28,7 +40,6 @@ const Dashboard = ({ utente, onLogout, onSelectProject }) => {
 
         const ownedIds = (owned ?? []).map(p => p.id)
 
-        // Progetti dove hai almeno un task assegnato a te (e non sei il proprietario)
         const { data: myTasks } = await supabase
             .from("tasks")
             .select("project_id")
@@ -63,121 +74,195 @@ const Dashboard = ({ utente, onLogout, onSelectProject }) => {
     }, [])
 
     return (
-        <div className="min-h-screen bg-gray-50">
-            <header className="bg-white shadow-sm py-4 px-6 flex items-center justify-between">
-                <h1 className="text-xl font-bold text-blue-500">TaskFlow</h1>
-                <div className="flex items-center gap-4">
-                    <p className="text-gray-600 text-sm">Ciao, <strong>{utente.nome}</strong> !</p>
+        <div className="min-h-screen bg-gray-50 flex">
+
+            {/* ── Sidebar ── */}
+            <aside className="w-52 bg-white border-r border-gray-100 flex flex-col fixed left-0 top-0 bottom-0 z-10">
+                {/* Logo */}
+                <div className="px-5 py-5">
+                    <h1 className="text-base font-bold text-gray-800 tracking-tight">TaskFlow</h1>
+                </div>
+
+                {/* Nav */}
+                <nav className="flex-1 px-3 flex flex-col gap-0.5">
+                    {NAV.map(item => (
+                        <button
+                            key={item.id}
+                            onClick={() => setVistaAttiva(item.id)}
+                            className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                                vistaAttiva === item.id
+                                    ? "bg-blue-50 text-blue-700 font-medium"
+                                    : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                            }`}
+                        >
+                            <span className="text-base">{item.icon}</span>
+                            <span>{item.label}</span>
+                            {item.id === "task" && taskAssegnati.length > 0 && (
+                                <span className="ml-auto text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full font-semibold">
+                                    {taskAssegnati.length}
+                                </span>
+                            )}
+                        </button>
+                    ))}
+                </nav>
+
+                {/* User */}
+                <div className="px-4 py-4 border-t border-gray-100">
+                    <div className="flex items-center gap-2 mb-3">
+                        <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center shrink-0">
+                            {utente.nome?.[0]}{utente.cognome?.[0]}
+                        </div>
+                        <div className="min-w-0">
+                            <p className="text-xs font-medium text-gray-700 truncate">{utente.nome} {utente.cognome}</p>
+                            <p className="text-[10px] text-gray-400 truncate">{utente.email}</p>
+                        </div>
+                    </div>
                     <button
                         onClick={onLogout}
-                        className="text-sm text-red-400 hover:text-red-600 transition-colors"
+                        className="text-xs text-red-400 hover:text-red-600 transition-colors"
                     >
                         Esci
                     </button>
                 </div>
-            </header>
+            </aside>
 
-            <main className="max-w-4xl mx-auto px-4 py-8">
-                {taskAssegnati.length > 0 && (
-                    <div className="mb-10">
-                        <button
-                            onClick={() => setShowTaskAssegnati(!showTaskAssegnati)}
-                            className="flex items-center gap-2 mb-4 hover:opacity-80 transition-opacity"
-                        >
-                            <span className="text-xl font-semibold text-gray-800">📌 Task assegnati a te</span>
-                            <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-medium">
-                                {taskAssegnati.length}
-                            </span>
-                            <span className="text-xs text-gray-400">{showTaskAssegnati ? "▲" : "▼"}</span>
-                        </button>
-                        {showTaskAssegnati && (
-                            <div className="flex flex-col gap-3">
-                                {taskAssegnati.map(task => (
-                                    <div key={task.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex items-center justify-between">
-                                        <div>
-                                            <p className="font-medium text-gray-800 text-sm">{task.titolo}</p>
-                                            <p className="text-xs text-gray-400 mt-1">📁 {task.projects?.nome}</p>
-                                            {task.scadenza && <p className="text-xs text-gray-400 mt-1">📅 {new Date(task.scadenza + "T00:00:00").toLocaleDateString("it-IT")}</p>}
+            {/* ── Contenuto principale ── */}
+            <main className="ml-52 flex-1 px-8 py-8 min-h-screen">
+
+                {/* Vista Progetti */}
+                {vistaAttiva === "progetti" && (
+                    <>
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-lg font-semibold text-gray-800">I tuoi progetti</h2>
+                        </div>
+
+                        {loading ? (
+                            <p className="text-gray-400 text-center mt-16">Caricamento...</p>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {projects.map((project, i) => {
+                                    const totale = project.tasks?.length ?? 0
+                                    const completati = project.tasks?.filter(t => t.stato === "completato").length ?? 0
+                                    const progressoPct = totale > 0 ? Math.round((completati / totale) * 100) : 0
+                                    const bandColor = BAND_COLORS[i % BAND_COLORS.length]
+
+                                    return (
+                                        <div
+                                            key={project.id}
+                                            onClick={() => onSelectProject(project)}
+                                            className="group bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all cursor-pointer overflow-hidden"
+                                        >
+                                            <div className={`${bandColor} h-10 relative`}>
+                                                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); setEditingProject(project) }}
+                                                        className="w-5 h-5 flex items-center justify-center rounded-full bg-white/60 hover:bg-white text-gray-500 hover:text-blue-500 text-xs transition-all"
+                                                        title="Modifica progetto"
+                                                    >
+                                                        ✎
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => handleDeleteProject(e, project.id)}
+                                                        className="w-5 h-5 flex items-center justify-center rounded-full bg-white/60 hover:bg-white text-gray-500 hover:text-red-500 text-xs transition-all"
+                                                        title="Elimina progetto"
+                                                    >
+                                                        ×
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <div className="px-4 py-4">
+                                                <h3 className="font-semibold text-gray-800 text-sm mb-1 truncate">{project.nome}</h3>
+                                                {project.description ? (
+                                                    <p className="text-xs text-gray-400 line-clamp-2 mb-4 leading-relaxed">{project.description}</p>
+                                                ) : (
+                                                    <div className="mb-4" />
+                                                )}
+                                                <div className="bg-gray-100 rounded-full h-1.5 mb-2">
+                                                    <div
+                                                        className="bg-emerald-400 rounded-full h-1.5 transition-all"
+                                                        style={{ width: `${progressoPct}%` }}
+                                                    />
+                                                </div>
+                                                <p className="text-xs text-gray-400">
+                                                    {totale === 0 ? "Nessun task" : `${completati} di ${totale} completati`}
+                                                </p>
+                                            </div>
                                         </div>
-                                        <span className={`text-xs px-3 py-1 rounded-full font-medium shrink-0 ml-4 ${
-                                            task.stato === "in_corso" ? "bg-yellow-100 text-yellow-600" : "bg-gray-100 text-gray-600"
-                                        }`}>
-                                            {task.stato === "in_corso" ? "in corso" : "da fare"}
-                                        </span>
+                                    )
+                                })}
+
+                                <button
+                                    onClick={() => setShowForm(true)}
+                                    className="group bg-white rounded-2xl border-2 border-dashed border-gray-200 hover:border-blue-300 hover:bg-blue-50/30 transition-all flex flex-col items-center justify-center gap-2 min-h-36"
+                                >
+                                    <span className="w-8 h-8 rounded-full bg-gray-100 group-hover:bg-blue-100 flex items-center justify-center text-gray-400 group-hover:text-blue-500 text-xl transition-colors">+</span>
+                                    <span className="text-xs text-gray-400 group-hover:text-blue-500 font-medium transition-colors">Nuovo progetto</span>
+                                </button>
+                            </div>
+                        )}
+                    </>
+                )}
+
+                {/* Vista Task miei */}
+                {vistaAttiva === "task" && (
+                    <>
+                        <div className="mb-6">
+                            <h2 className="text-lg font-semibold text-gray-800">Task assegnati a te</h2>
+                            <p className="text-sm text-gray-400 mt-1">Task attivi nei progetti a cui partecipi</p>
+                        </div>
+
+                        {taskAssegnati.length === 0 ? (
+                            <p className="text-gray-400 text-center mt-16">Nessun task assegnato al momento.</p>
+                        ) : (
+                            <div className="flex flex-col gap-3 max-w-2xl">
+                                {taskAssegnati.map(task => (
+                                    <div key={task.id} className="bg-white rounded-xl border border-gray-100 px-4 py-3 flex items-center justify-between shadow-sm">
+                                        <div>
+                                            <p className="text-sm font-medium text-gray-700">{task.titolo}</p>
+                                            <p className="text-xs text-gray-400 mt-0.5">📁 {task.projects?.nome}</p>
+                                        </div>
+                                        <div className="flex items-center gap-3 shrink-0 ml-4">
+                                            {task.scadenza && (
+                                                <span className="text-xs text-gray-400">
+                                                    📅 {new Date(task.scadenza + "T00:00:00").toLocaleDateString("it-IT")}
+                                                </span>
+                                            )}
+                                            <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+                                                task.stato === "in_corso"
+                                                    ? "bg-amber-100 text-amber-600"
+                                                    : "bg-gray-100 text-gray-500"
+                                            }`}>
+                                                {task.stato === "in_corso" ? "In corso" : "Da fare"}
+                                            </span>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
                         )}
-                    </div>
+                    </>
                 )}
 
-                <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xl font-semibold text-gray-800">I tuoi progetti</h2>
-                    <button
-                        onClick={() => setShowForm(true)}
-                        className="bg-blue-500 text-white px-4 py-2 rounded-xl text-sm hover:bg-blue-600 transition-colors"
-                    >
-                        + Nuovo progetto
-                    </button>
-                </div>
+                {/* Vista Impostazioni */}
+                {vistaAttiva === "impostazioni" && (
+                    <>
+                        <div className="mb-6">
+                            <h2 className="text-lg font-semibold text-gray-800">Impostazioni</h2>
+                            <p className="text-sm text-gray-400 mt-1">Gestisci il tuo profilo</p>
+                        </div>
 
-                {loading ? (
-                    <p className="text-gray-400 text-center mt-12">Caricamento...</p>
-                ) : projects.length === 0 ? (
-                    <p className="text-gray-400 text-center mt-12">
-                        Nessun progetto ancora — creane uno !
-                    </p>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {projects.map(project => {
-                            const completati = project.tasks?.filter(t => t.stato === "completato").length ?? 0
-                            const inCorso = project.tasks?.filter(t => t.stato === "in_corso").length ?? 0
-                            const daFare = project.tasks?.filter(t => t.stato === "da_fare").length ?? 0
-                            const totale = project.tasks?.length ?? 0
-
-                            return (
-                                <div
-                                    key={project.id}
-                                    onClick={() => onSelectProject(project)}
-                                    className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 cursor-pointer hover:shadow-md transition-shadow"
-                                >
-                                    <div className="flex items-start justify-between mb-1">
-                                        <h3 className="text-lg font-semibold text-gray-800">{project.nome}</h3>
-                                        {project.user_id === utente.id && (
-                                            <button
-                                                onClick={(e) => handleDeleteProject(e, project.id)}
-                                                className="text-xs text-red-400 hover:text-red-600 transition-colors ml-2 shrink-0"
-                                            >
-                                                Elimina
-                                            </button>
-                                        )}
-                                    </div>
-                                    <p className="text-sm text-gray-500 mb-4">{project.description}</p>
-
-                                    <div className="flex items-center gap-3 text-xs">
-                                        <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
-                                            📋 {daFare} da fare
-                                        </span>
-                                        <span className="bg-yellow-100 text-yellow-600 px-2 py-1 rounded-full">
-                                            ⏳ {inCorso} in corso
-                                        </span>
-                                        <span className="bg-green-100 text-green-600 px-2 py-1 rounded-full">
-                                            ✅ {completati} completati
-                                        </span>
-                                    </div>
-
-                                    {totale > 0 && (
-                                        <div className="mt-3 bg-gray-100 rounded-full h-2">
-                                            <div
-                                                className="bg-green-400 rounded-full h-2 transition-all"
-                                                style={{ width: `${(completati / totale) * 100}%` }}
-                                            />
-                                        </div>
-                                    )}
+                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 max-w-md">
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-700 text-lg font-bold flex items-center justify-center">
+                                    {utente.nome?.[0]}{utente.cognome?.[0]}
                                 </div>
-                            )
-                        })}
-                    </div>
+                                <div>
+                                    <p className="font-semibold text-gray-800">{utente.nome} {utente.cognome}</p>
+                                    <p className="text-sm text-gray-400">{utente.email}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </>
                 )}
             </main>
 
@@ -186,6 +271,14 @@ const Dashboard = ({ utente, onLogout, onSelectProject }) => {
                     utente={utente}
                     onProjectAdded={fetchProjects}
                     onClose={() => setShowForm(false)}
+                />
+            )}
+            {editingProject && (
+                <ProjectForm
+                    utente={utente}
+                    project={editingProject}
+                    onProjectAdded={fetchProjects}
+                    onClose={() => setEditingProject(null)}
                 />
             )}
         </div>
