@@ -339,7 +339,7 @@ const Project = ({ project, utente, onBack, onLogout }) => {
                 </div>
             )}
 
-            <main className="max-w-7xl mx-auto px-4 py-6 md:py-8">
+            <main className="max-w-4xl mx-auto px-4 py-6 md:py-8">
                 {project.description && (
                     <p className="text-gray-500 text-sm mb-6">{project.description}</p>
                 )}
