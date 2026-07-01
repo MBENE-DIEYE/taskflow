@@ -202,7 +202,7 @@ const Login = ({ onLogin }) => {
                     <button
                         type='submit'
                         disabled={loading}
-                        className='bg-blue-100 text-blue-700 px-6 py-2 rounded-xl hover:bg-blue-200 transition-colors disabled:opacity-50'
+                        className='bg-blue-500 text-white px-6 py-2 rounded-xl hover:bg-blue-600 transition-colors disabled:opacity-50'
                     >
                         {loading ? "Caricamento..." : isRegistro ? "Registrati" : "Accedi"}
                     </button>
